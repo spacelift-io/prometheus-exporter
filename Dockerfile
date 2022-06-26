@@ -13,7 +13,7 @@ RUN CGO_ENABLED=0 go build -buildvcs=false -a -tags netgo -ldflags "-w -extldfla
 # WORKDIR $DIR
 
 FROM alpine:3.15
-EXPOSE 8080
+EXPOSE 9953
 
 RUN apk add --no-cache ca-certificates
 RUN apk upgrade --update-cache --available

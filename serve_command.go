@@ -19,9 +19,9 @@ var (
 	flagListenAddress = &cli.StringFlag{
 		Name:        "listen-address",
 		Aliases:     []string{"l"},
-		Value:       ":8080",
+		Value:       ":9953",
 		Usage:       "The address to listen on for HTTP requests",
-		EnvVars:     []string{"SPACELIFT_PROM_LISTEN_ADDRESS"},
+		EnvVars:     []string{"SPACELIFT_PROMEX_LISTEN_ADDRESS"},
 		Destination: &listenAddress,
 	}
 
@@ -30,7 +30,7 @@ var (
 		Name:        "api-endpoint",
 		Aliases:     []string{"e"},
 		Usage:       "Your spacelift API endpoint (e.g. https://myaccount.app.spacelift.io)",
-		EnvVars:     []string{"SPACELIFT_PROM_API_ENDPOINT"},
+		EnvVars:     []string{"SPACELIFT_PROMEX_API_ENDPOINT"},
 		Required:    true,
 		Destination: &apiEndpoint,
 	}
@@ -40,7 +40,7 @@ var (
 		Name:        "api-key-id",
 		Aliases:     []string{"k"},
 		Usage:       "Your spacelift API key ID",
-		EnvVars:     []string{"SPACELIFT_PROM_API_KEY_ID"},
+		EnvVars:     []string{"SPACELIFT_PROMEX_API_KEY_ID"},
 		Required:    true,
 		Destination: &apiKeyID,
 	}
@@ -50,7 +50,7 @@ var (
 		Name:        "api-key-secret",
 		Aliases:     []string{"s"},
 		Usage:       "Your spacelift API key secret",
-		EnvVars:     []string{"SPACELIFT_PROM_API_KEY_SECRET"},
+		EnvVars:     []string{"SPACELIFT_PROMEX_API_KEY_SECRET"},
 		Required:    true,
 		Destination: &apiKeySecret,
 	}
