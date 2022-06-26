@@ -2,6 +2,8 @@
 
 This repository contains a Prometheus exporter for exporting metrics from your Spacelift account.
 
+![Dashboard Example](dashboard-example.png)
+
 ## TODO
 
 - Goreleaser.
