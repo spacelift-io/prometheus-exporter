@@ -1,16 +1,16 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spacelift-io/spacelift-prometheus-exporter/client/session"
+	"github.com/spacelift-io/spacelift-prometheus-exporter/logging"
 	"github.com/urfave/cli/v2"
+	"go.uber.org/zap"
 	"golang.org/x/net/context"
 )
 
@@ -54,6 +54,15 @@ var (
 		Required:    true,
 		Destination: &apiKeySecret,
 	}
+
+	isDevelopment     bool
+	flagIsDevelopment = &cli.BoolFlag{
+		Name:        "is-development",
+		Aliases:     []string{"d"},
+		Usage:       "Uses settings appropriate during local development",
+		EnvVars:     []string{"SPACELIFT_PROMEX_IS_DEVELOPMENT"},
+		Destination: &isDevelopment,
+	}
 )
 
 var serveCommand *cli.Command = &cli.Command{
@@ -64,26 +73,30 @@ var serveCommand *cli.Command = &cli.Command{
 		flagAPIEndpoint,
 		flagAPIKeyID,
 		flagAPIKeySecret,
+		flagIsDevelopment,
 	},
-	Action: func(ctx *cli.Context) error {
+	Action: func(cliCtx *cli.Context) error {
+		ctx := logging.Init(cliCtx.Context, isDevelopment)
+		logger := logging.FromContext(ctx).Sugar()
+
 		session, err := func() (session.Session, error) {
-			sessionCtx, cancel := context.WithTimeout(ctx.Context, time.Second*5)
+			sessionCtx, cancel := context.WithTimeout(ctx, time.Second*5)
 			defer cancel()
 			return session.New(sessionCtx, http.DefaultClient, apiEndpoint, apiKeyID, apiKeySecret)
 		}()
 		if err != nil {
-			return errors.Wrap(err, "could not create session from Spacelift API key")
+			logger.Fatalw("failed to create Spacelift API session", zap.Error(err))
+			return cli.Exit("could not create session from Spacelift API key", ExitCodeStartupError)
 		}
 
 		// Create a new registry.
 		reg := prometheus.NewRegistry()
 
 		// Add Go module build info.
-		reg.MustRegister(collectors.NewBuildInfoCollector())
 		reg.MustRegister(collectors.NewGoCollector(
 			collectors.WithGoCollections(collectors.GoRuntimeMemStatsCollection | collectors.GoRuntimeMetricsCollection),
 		))
-		reg.MustRegister(newSpaceliftCollector(http.DefaultClient, session))
+		reg.MustRegister(newSpaceliftCollector(ctx, http.DefaultClient, session))
 
 		// Expose the registered metrics via HTTP.
 		http.Handle("/metrics", promhttp.HandlerFor(
@@ -93,8 +106,14 @@ var serveCommand *cli.Command = &cli.Command{
 				EnableOpenMetrics: true,
 			},
 		))
-		listenAddress := ctx.String(flagListenAddress.Name)
-		fmt.Printf("Listening on %s\n", listenAddress)
+
+		http.Handle("/health", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte("Countdown complete - ready to serve metrics!"))
+		}))
+
+		listenAddress := cliCtx.String(flagListenAddress.Name)
+
+		logger.Info("Listening on ", listenAddress)
 
 		return http.ListenAndServe(listenAddress, nil)
 	},

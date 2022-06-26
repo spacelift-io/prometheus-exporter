@@ -2,15 +2,18 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spacelift-io/spacelift-prometheus-exporter/client"
 	"github.com/spacelift-io/spacelift-prometheus-exporter/client/session"
+	"github.com/spacelift-io/spacelift-prometheus-exporter/logging"
+	"go.uber.org/zap"
 )
 
 type spaceliftCollector struct {
+	ctx                                    context.Context
+	logger                                 *zap.SugaredLogger
 	client                                 client.Client
 	publicRunsPending                      *prometheus.Desc
 	publicWorkersBusy                      *prometheus.Desc
@@ -27,8 +30,10 @@ type spaceliftCollector struct {
 	currentBillingPeriodUsedPrivateWorkers *prometheus.Desc
 }
 
-func newSpaceliftCollector(httpClient *http.Client, session session.Session) prometheus.Collector {
+func newSpaceliftCollector(ctx context.Context, httpClient *http.Client, session session.Session) prometheus.Collector {
 	return &spaceliftCollector{
+		ctx:    ctx,
+		logger: logging.FromContext(ctx).Sugar(),
 		client: client.New(httpClient, session),
 		publicRunsPending: prometheus.NewDesc(
 			"spacelift_public_worker_pool_runs_pending",
@@ -144,7 +149,14 @@ func (c *spaceliftCollector) Collect(metricChannel chan<- prometheus.Metric) {
 
 	// TODO: add a timeout
 	if err := c.client.Query(context.Background(), &query, nil); err != nil {
-		fmt.Printf("Error querying Spacelift: %v\n", err)
+		c.logger.Errorw("failed to query Spacelift API", zap.Error(err))
+		metricChannel <- prometheus.NewInvalidMetric(
+			prometheus.NewDesc(
+				"spacelift_error",
+				"Failed to request metrics from the Spacelift API",
+				nil,
+				nil),
+			err)
 		return
 	}
 
