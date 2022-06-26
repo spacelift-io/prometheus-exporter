@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "description": "A Prometheus exporter for Spacelift account metrics.",
   "main": "index.js",
-  "repository": "https://github.com/spacelift-io/spacelift-prometheus-exporter",
+  "repository": "https://github.com/spacelift-io/prometheus-exporter",
   "author": "Spacelift Developers <dev@spacelift.io>",
   "license": "MIT",
   "private": false,
