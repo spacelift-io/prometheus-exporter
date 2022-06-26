@@ -7,7 +7,6 @@ This repository contains a Prometheus exporter for exporting metrics from your S
 - Goreleaser.
 - Double check against best practices.
 - Signal handling.
-- Nice index page.
 
 ## Quick Start
 

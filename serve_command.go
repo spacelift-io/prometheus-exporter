@@ -104,6 +104,18 @@ var serveCommand *cli.Command = &cli.Command{
 			return cli.Exit("could not create session from Spacelift API key", ExitCodeStartupError)
 		}
 
+		http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(`
+			<html>
+				<head>
+					<title>Spacelift Prometheus Exporter</title>
+				</head>
+				<body>
+					Welcome to the Spacelift Prometheus exporter! Please find the available metrics at <a href="/metrics">/metrics</a>.
+				</body>
+			</html>`))
+		}))
+
 		// Create a new registry.
 		reg := prometheus.NewRegistry()
 
