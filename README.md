@@ -43,18 +43,19 @@ spacelift-promex serve --listen-address ":9999" --api-endpoint "https://<account
 
 The following metrics are provided by the exporter:
 
-| Metric                                                   | Labels                               | Description                                                                                    |
-| -------------------------------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| spacelift_public_worker_pool_runs_pending                |                                      | The number of runs in your account currently queued and waiting for a public worker            |
-| spacelift_public_worker_pool_workers_busy                |                                      | The number of currently busy workers in the public worker pool for this account                |
-| spacelift_public_worker_pool_parallelism                 |                                      | The maximum number of simultaneously executing runs on the public worker pool for this account |
-| spacelift_worker_pool_runs_pending                       | `worker_pool_id`, `worker_pool_name` | The number of runs currently queued and waiting for a worker from a particular pool            |
-| spacelift_worker_pool_workers_busy                       | `worker_pool_id`, `worker_pool_name` | The number of currently busy workers in a worker pool                                          |
-| spacelift_worker_pool_workers                            | `worker_pool_id`, `worker_pool_name` | The number of workers in a worker pool                                                         |
-| spacelift_worker_pool_workers_drained                    | `worker_pool_id`, `worker_pool_name` | The number of workers in a worker pool that have been drained                                  |
-| spacelift_current_billing_period_start_timestamp_seconds |                                      | The timestamp of the start of the current billing period                                       |
-| spacelift_current_billing_period_end_timestamp_seconds   |                                      | The timestamp of the end of the current billing period                                         |
-| spacelift_current_billing_period_used_private_minutes    |                                      | The number of minutes used in the current billing period                                       |
-| spacelift_current_billing_period_used_public_minutes     |                                      | The number of minutes used in the current billing period                                       |
-| spacelift_current_billing_period_used_seats              |                                      | The number of seats used in the current billing period                                         |
-| spacelift_current_billing_period_used_private_workers    |                                      | The number of private workers used in the current billing period                               |
+| Metric                                                     | Labels                               | Description                                                                                    |
+| ---------------------------------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `spacelift_public_worker_pool_runs_pending`                |                                      | The number of runs in your account currently queued and waiting for a public worker            |
+| `spacelift_public_worker_pool_workers_busy`                |                                      | The number of currently busy workers in the public worker pool for this account                |
+| `spacelift_public_worker_pool_parallelism`                 |                                      | The maximum number of simultaneously executing runs on the public worker pool for this account |
+| `spacelift_worker_pool_runs_pending`                       | `worker_pool_id`, `worker_pool_name` | The number of runs currently queued and waiting for a worker from a particular pool            |
+| `spacelift_worker_pool_workers_busy`                       | `worker_pool_id`, `worker_pool_name` | The number of currently busy workers in a worker pool                                          |
+| `spacelift_worker_pool_workers`                            | `worker_pool_id`, `worker_pool_name` | The number of workers in a worker pool                                                         |
+| `spacelift_worker_pool_workers_drained`                    | `worker_pool_id`, `worker_pool_name` | The number of workers in a worker pool that have been drained                                  |
+| `spacelift_current_billing_period_start_timestamp_seconds` |                                      | The timestamp of the start of the current billing period                                       |
+| `spacelift_current_billing_period_end_timestamp_seconds`   |                                      | The timestamp of the end of the current billing period                                         |
+| `spacelift_current_billing_period_used_private_minutes`    |                                      | The number of minutes used in the current billing period                                       |
+| `spacelift_current_billing_period_used_public_minutes`     |                                      | The number of minutes used in the current billing period                                       |
+| `spacelift_current_billing_period_used_seats`              |                                      | The number of seats used in the current billing period                                         |
+| `spacelift_current_billing_period_used_private_workers`    |                                      | The number of private workers used in the current billing period                               |
+| `spacelift_scrape_duration`                                |                                      | The duration in seconds of the request to the Spacelift API for metrics                        |

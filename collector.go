@@ -30,6 +30,7 @@ type spaceliftCollector struct {
 	currentBillingPeriodUsedPublicMinutes  *prometheus.Desc
 	currentBillingPeriodUsedSeats          *prometheus.Desc
 	currentBillingPeriodUsedPrivateWorkers *prometheus.Desc
+	scrapeDuration                         *prometheus.Desc
 }
 
 func newSpaceliftCollector(ctx context.Context, httpClient *http.Client, session session.Session, scrapeTimeout time.Duration) prometheus.Collector {
@@ -103,6 +104,11 @@ func newSpaceliftCollector(ctx context.Context, httpClient *http.Client, session
 			"The number of private workers used in the current billing period",
 			nil,
 			nil),
+		scrapeDuration: prometheus.NewDesc(
+			"spacelift_scrape_duration_seconds",
+			"The duration in seconds of the request to the Spacelift API for metrics",
+			nil,
+			nil),
 	}
 }
 
@@ -150,11 +156,15 @@ type metricsQuery struct {
 func (c *spaceliftCollector) Collect(metricChannel chan<- prometheus.Metric) {
 	var query metricsQuery
 
+	start := time.Now()
 	err := func() error {
 		ctx, cancel := context.WithTimeout(c.ctx, c.scrapeTimeout)
 		defer cancel()
 		return c.client.Query(ctx, &query, nil)
 	}()
+
+	scrapeDuration := time.Since(start)
+	metricChannel <- prometheus.MustNewConstMetric(c.scrapeDuration, prometheus.GaugeValue, scrapeDuration.Seconds())
 
 	if err != nil {
 		msg := "Failed to request metrics from the Spacelift API"
