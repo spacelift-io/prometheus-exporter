@@ -63,6 +63,16 @@ var (
 		EnvVars:     []string{"SPACELIFT_PROMEX_IS_DEVELOPMENT"},
 		Destination: &isDevelopment,
 	}
+
+	scrapeTimeout     time.Duration
+	flagScrapeTimeout = &cli.DurationFlag{
+		Name:        "scrape-timeout",
+		Aliases:     []string{"t"},
+		Usage:       "The maximum duration to wait for a response from the Spacelift API during scraping",
+		EnvVars:     []string{"SPACELIFT_PROMEX_SCRAPE_TIMEOUT"},
+		Value:       time.Second * 5,
+		Destination: &scrapeTimeout,
+	}
 )
 
 var serveCommand *cli.Command = &cli.Command{
@@ -74,10 +84,15 @@ var serveCommand *cli.Command = &cli.Command{
 		flagAPIKeyID,
 		flagAPIKeySecret,
 		flagIsDevelopment,
+		flagScrapeTimeout,
 	},
 	Action: func(cliCtx *cli.Context) error {
 		ctx := logging.Init(cliCtx.Context, isDevelopment)
 		logger := logging.FromContext(ctx).Sugar()
+
+		if scrapeTimeout <= 0 {
+			return cli.Exit("scrape-timeout must be greater than 0", ExitCodeStartupError)
+		}
 
 		session, err := func() (session.Session, error) {
 			sessionCtx, cancel := context.WithTimeout(ctx, time.Second*5)
@@ -96,7 +111,7 @@ var serveCommand *cli.Command = &cli.Command{
 		reg.MustRegister(collectors.NewGoCollector(
 			collectors.WithGoCollections(collectors.GoRuntimeMemStatsCollection | collectors.GoRuntimeMetricsCollection),
 		))
-		reg.MustRegister(newSpaceliftCollector(ctx, http.DefaultClient, session))
+		reg.MustRegister(newSpaceliftCollector(ctx, http.DefaultClient, session, scrapeTimeout))
 
 		// Expose the registered metrics via HTTP.
 		http.Handle("/metrics", promhttp.HandlerFor(

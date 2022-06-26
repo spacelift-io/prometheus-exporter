@@ -4,7 +4,6 @@ This repository contains a Prometheus exporter for exporting metrics from your S
 
 ## TODO
 
-- Timeout on scrapes.
 - Goreleaser.
 - Double check against best practices.
 - Signal handling.

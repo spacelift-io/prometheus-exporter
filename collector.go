@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spacelift-io/spacelift-prometheus-exporter/client"
@@ -15,6 +16,7 @@ type spaceliftCollector struct {
 	ctx                                    context.Context
 	logger                                 *zap.SugaredLogger
 	client                                 client.Client
+	scrapeTimeout                          time.Duration
 	publicRunsPending                      *prometheus.Desc
 	publicWorkersBusy                      *prometheus.Desc
 	publicParallelism                      *prometheus.Desc
@@ -30,11 +32,12 @@ type spaceliftCollector struct {
 	currentBillingPeriodUsedPrivateWorkers *prometheus.Desc
 }
 
-func newSpaceliftCollector(ctx context.Context, httpClient *http.Client, session session.Session) prometheus.Collector {
+func newSpaceliftCollector(ctx context.Context, httpClient *http.Client, session session.Session, scrapeTimeout time.Duration) prometheus.Collector {
 	return &spaceliftCollector{
-		ctx:    ctx,
-		logger: logging.FromContext(ctx).Sugar(),
-		client: client.New(httpClient, session),
+		ctx:           ctx,
+		logger:        logging.FromContext(ctx).Sugar(),
+		client:        client.New(httpClient, session),
+		scrapeTimeout: scrapeTimeout,
 		publicRunsPending: prometheus.NewDesc(
 			"spacelift_public_worker_pool_runs_pending",
 			"The number of runs in your account currently queued and waiting for a public worker",
@@ -147,16 +150,27 @@ type metricsQuery struct {
 func (c *spaceliftCollector) Collect(metricChannel chan<- prometheus.Metric) {
 	var query metricsQuery
 
-	// TODO: add a timeout
-	if err := c.client.Query(context.Background(), &query, nil); err != nil {
-		c.logger.Errorw("failed to query Spacelift API", zap.Error(err))
+	err := func() error {
+		ctx, cancel := context.WithTimeout(c.ctx, c.scrapeTimeout)
+		defer cancel()
+		return c.client.Query(ctx, &query, nil)
+	}()
+
+	if err != nil {
+		msg := "Failed to request metrics from the Spacelift API"
+		if err == context.DeadlineExceeded {
+			msg = "The request to the Spacelift API for metric data timed out"
+		}
+
+		c.logger.Errorw(msg, zap.Error(err))
 		metricChannel <- prometheus.NewInvalidMetric(
 			prometheus.NewDesc(
 				"spacelift_error",
-				"Failed to request metrics from the Spacelift API",
+				msg,
 				nil,
 				nil),
 			err)
+
 		return
 	}
 
