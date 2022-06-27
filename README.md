@@ -9,6 +9,8 @@ This repository contains a Prometheus exporter for exporting metrics from your S
 - Goreleaser.
 - Double check against best practices.
 - Signal handling.
+- Create a PR to add our port number to
+  <https://github.com/prometheus/prometheus/wiki/Default-port-allocations>.
 
 ## Quick Start
 
@@ -61,3 +63,8 @@ The following metrics are provided by the exporter:
 | `spacelift_current_billing_period_used_seats`              |                                      | The number of seats used in the current billing period                                         |
 | `spacelift_current_billing_period_used_private_workers`    |                                      | The number of private workers used in the current billing period                               |
 | `spacelift_scrape_duration`                                |                                      | The duration in seconds of the request to the Spacelift API for metrics                        |
+
+## Example Dashboard
+
+If you're looking for inspiration, you can find an example Grafana dashboard
+[here](examples/example-dashboard.json).
