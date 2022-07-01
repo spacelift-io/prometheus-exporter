@@ -1,7 +1,10 @@
 package main
 
 import (
+	"errors"
 	"net/http"
+	"os"
+	"os/signal"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -94,6 +97,8 @@ var serveCommand *cli.Command = &cli.Command{
 			return cli.Exit("scrape-timeout must be greater than 0", ExitCodeStartupError)
 		}
 
+		logger.Info("Prepping exporter for lift-off")
+
 		session, err := func() (session.Session, error) {
 			sessionCtx, cancel := context.WithTimeout(ctx, time.Second*5)
 			defer cancel()
@@ -103,6 +108,8 @@ var serveCommand *cli.Command = &cli.Command{
 			logger.Fatalw("failed to create Spacelift API session", zap.Error(err))
 			return cli.Exit("could not create session from Spacelift API key", ExitCodeStartupError)
 		}
+
+		logger.Info("Successfully created Spacelift API session")
 
 		http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(`
@@ -140,8 +147,32 @@ var serveCommand *cli.Command = &cli.Command{
 
 		listenAddress := cliCtx.String(flagListenAddress.Name)
 
-		logger.Info("Listening on ", listenAddress)
+		logger.Info("Ready for launch! Listening on ", listenAddress)
 
-		return http.ListenAndServe(listenAddress, nil)
+		server := http.Server{Addr: listenAddress}
+
+		go func() {
+			if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				logger.Fatalw("Error running HTTP server", zap.Error(err))
+			}
+		}()
+
+		stop := make(chan os.Signal, 1)
+		signal.Notify(stop, os.Interrupt)
+
+		// Wait for interrupt signal to gracefully shutdown the server.
+		<-stop
+
+		logger.Info("Received stop signal - shutting down exporter")
+
+		ctx, cancel := context.WithTimeout(ctx, time.Second*5)
+		defer cancel()
+		if err := server.Shutdown(ctx); err != nil {
+			logger.Errorw("Failed to gracefully shutdown exporter", zap.Error(err))
+		}
+
+		logger.Info("Exporter has landed successfully!")
+
+		return nil
 	},
 }
