@@ -31,7 +31,7 @@ Use the following command to run the exporter via Docker:
 docker run -it --rm -p 9953:9953 -e "SPACELIFT_PROMEX_API_ENDPOINT=https://<account>.app.spacelift.io" \
   -e "SPACELIFT_PROMEX_API_KEY_ID=<API Key ID>" \
   -e "SPACELIFT_PROMEX_API_KEY_SECRET=<API Key Secret>" \
-  adamcspacelift/spacelift-promex
+  public.ecr.aws/spacelift/promex
 ```
 
 ### Port Number
