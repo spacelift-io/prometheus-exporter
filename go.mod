@@ -1,4 +1,4 @@
-module github.com/spacelift-io/spacelift-prometheus-exporter
+module github.com/spacelift-io/prometheus-exporter
 
 go 1.18
 

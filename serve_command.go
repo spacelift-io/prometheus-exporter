@@ -10,11 +10,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/spacelift-io/spacelift-prometheus-exporter/client/session"
-	"github.com/spacelift-io/spacelift-prometheus-exporter/logging"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
+
+	"github.com/spacelift-io/prometheus-exporter/client/session"
+	"github.com/spacelift-io/prometheus-exporter/logging"
 )
 
 var (

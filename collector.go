@@ -6,10 +6,11 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/spacelift-io/spacelift-prometheus-exporter/client"
-	"github.com/spacelift-io/spacelift-prometheus-exporter/client/session"
-	"github.com/spacelift-io/spacelift-prometheus-exporter/logging"
 	"go.uber.org/zap"
+
+	"github.com/spacelift-io/prometheus-exporter/client"
+	"github.com/spacelift-io/prometheus-exporter/client/session"
+	"github.com/spacelift-io/prometheus-exporter/logging"
 )
 
 type spaceliftCollector struct {
