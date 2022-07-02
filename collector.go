@@ -27,8 +27,8 @@ type spaceliftCollector struct {
 	workerPoolWorkersDrained               *prometheus.Desc
 	currentBillingPeriodStart              *prometheus.Desc
 	currentBillingPeriodEnd                *prometheus.Desc
-	currentBillingPeriodUsedPrivateMinutes *prometheus.Desc
-	currentBillingPeriodUsedPublicMinutes  *prometheus.Desc
+	currentBillingPeriodUsedPrivateSeconds *prometheus.Desc
+	currentBillingPeriodUsedPublicSeconds  *prometheus.Desc
 	currentBillingPeriodUsedSeats          *prometheus.Desc
 	currentBillingPeriodUsedPrivateWorkers *prometheus.Desc
 	scrapeDuration                         *prometheus.Desc
@@ -85,14 +85,14 @@ func newSpaceliftCollector(ctx context.Context, httpClient *http.Client, session
 			"The timestamp of the end of the current billing period",
 			nil,
 			nil),
-		currentBillingPeriodUsedPrivateMinutes: prometheus.NewDesc(
-			"spacelift_current_billing_period_used_private_minutes",
-			"The number of minutes used in the current billing period",
+		currentBillingPeriodUsedPrivateSeconds: prometheus.NewDesc(
+			"spacelift_current_billing_period_used_private_seconds",
+			"The amount of private worker usage in the current billing period",
 			nil,
 			nil),
-		currentBillingPeriodUsedPublicMinutes: prometheus.NewDesc(
-			"spacelift_current_billing_period_used_public_minutes",
-			"The number of minutes used in the current billing period",
+		currentBillingPeriodUsedPublicSeconds: prometheus.NewDesc(
+			"spacelift_current_billing_period_used_public_seconds",
+			"The amount of public worker usage in the current billing period",
 			nil,
 			nil),
 		currentBillingPeriodUsedSeats: prometheus.NewDesc(
@@ -122,8 +122,8 @@ func (c *spaceliftCollector) Describe(descriptorChannel chan<- *prometheus.Desc)
 	descriptorChannel <- c.workerPoolWorkersDrained
 	descriptorChannel <- c.currentBillingPeriodStart
 	descriptorChannel <- c.currentBillingPeriodEnd
-	descriptorChannel <- c.currentBillingPeriodUsedPrivateMinutes
-	descriptorChannel <- c.currentBillingPeriodUsedPublicMinutes
+	descriptorChannel <- c.currentBillingPeriodUsedPrivateSeconds
+	descriptorChannel <- c.currentBillingPeriodUsedPublicSeconds
 	descriptorChannel <- c.currentBillingPeriodUsedSeats
 	descriptorChannel <- c.currentBillingPeriodUsedPrivateWorkers
 }
@@ -190,8 +190,8 @@ func (c *spaceliftCollector) Collect(metricChannel chan<- prometheus.Metric) {
 	metricChannel <- prometheus.MustNewConstMetric(c.publicParallelism, prometheus.GaugeValue, float64(query.PublicWorkerPool.Parallelism))
 	metricChannel <- prometheus.MustNewConstMetric(c.currentBillingPeriodStart, prometheus.GaugeValue, float64(query.Usage.BillingPeriodStart))
 	metricChannel <- prometheus.MustNewConstMetric(c.currentBillingPeriodEnd, prometheus.GaugeValue, float64(query.Usage.BillingPeriodEnd))
-	metricChannel <- prometheus.MustNewConstMetric(c.currentBillingPeriodUsedPrivateMinutes, prometheus.GaugeValue, float64(query.Usage.UsedPrivateMinutes))
-	metricChannel <- prometheus.MustNewConstMetric(c.currentBillingPeriodUsedPublicMinutes, prometheus.GaugeValue, float64(query.Usage.UsedPublicMinutes))
+	metricChannel <- prometheus.MustNewConstMetric(c.currentBillingPeriodUsedPrivateSeconds, prometheus.GaugeValue, float64(query.Usage.UsedPrivateMinutes*60))
+	metricChannel <- prometheus.MustNewConstMetric(c.currentBillingPeriodUsedPublicSeconds, prometheus.GaugeValue, float64(query.Usage.UsedPublicMinutes*60))
 	metricChannel <- prometheus.MustNewConstMetric(c.currentBillingPeriodUsedSeats, prometheus.GaugeValue, float64(query.Usage.UsedSeats))
 	metricChannel <- prometheus.MustNewConstMetric(c.currentBillingPeriodUsedPrivateWorkers, prometheus.GaugeValue, float64(query.Usage.UsedPrivateWorkers))
 

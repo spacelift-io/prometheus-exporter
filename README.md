@@ -166,8 +166,8 @@ The following metrics are provided by the exporter:
 | `spacelift_worker_pool_workers_drained`                    | `worker_pool_id`, `worker_pool_name` | The number of workers in a worker pool that have been drained                                  |
 | `spacelift_current_billing_period_start_timestamp_seconds` |                                      | The timestamp of the start of the current billing period                                       |
 | `spacelift_current_billing_period_end_timestamp_seconds`   |                                      | The timestamp of the end of the current billing period                                         |
-| `spacelift_current_billing_period_used_private_minutes`    |                                      | The number of private minutes used in the current billing period                               |
-| `spacelift_current_billing_period_used_public_minutes`     |                                      | The number of public minutes used in the current billing period                                |
+| `spacelift_current_billing_period_used_private_seconds`    |                                      | The amount of private worker usage in the current billing period                               |
+| `spacelift_current_billing_period_used_public_seconds`     |                                      | The amount of public worker usage in the current billing period                                |
 | `spacelift_current_billing_period_used_seats`              |                                      | The number of seats used in the current billing period                                         |
 | `spacelift_current_billing_period_used_private_workers`    |                                      | The number of private workers used in the current billing period                               |
 | `spacelift_scrape_duration`                                |                                      | The duration in seconds of the request to the Spacelift API for metrics                        |
