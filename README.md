@@ -4,26 +4,31 @@ This repository contains a Prometheus exporter for exporting metrics from your S
 
 ![Dashboard Example](dashboard-example.png)
 
-## TODO
-
-- Goreleaser.
-- Double check against best practices.
-- Signal handling.
-- Create a PR to add our port number to
-  <https://github.com/prometheus/prometheus/wiki/Default-port-allocations>.
-
 ## Quick Start
 
-The Spacelift exporter is provided as a statically linked Go binary and a Docker container. The
-exporter uses
-[Spacelift API keys](https://docs.spacelift.io/integrations/api#spacelift-api-key-greater-than-token)
-to authenticate, and also needs to know your Spacelift account API endpoint.
+The Spacelift exporter is provided as a statically linked Go binary and a Docker container. You can
+find the latest release [here](https://github.com/spacelift-io/prometheus-exporter/releases/latest).
+The Docker container is available from our public container registry:
+`public.ecr.aws/spacelift/promex`.
 
-Use the following command to run the exporter binary:
+### Authentication
+
+The exporter uses
+[Spacelift API keys](https://docs.spacelift.io/integrations/api#spacelift-api-key-greater-than-token)
+to authenticate, and also needs to know your Spacelift account API endpoint. Your API endpoint is in
+the format `https://<account>.app.spacelift.io`, for example `https://my-account.app.spacelift.io`.
+
+### Running via the Binary
+
+Download the exporter binary from our
+[releases](https://github.com/spacelift-io/prometheus-exporter/releases/latest) page, make sure it's
+added to your PATH, and then use the `spacelift-promex serve` command to run the exporter binary:
 
 ```shell
 spacelift-promex serve --api-endpoint "https://<account>.app.spacelift.io" --api-key-id "<API Key ID>" --api-key-secret "<API Key Secret>"
 ```
+
+### Running via Docker
 
 Use the following command to run the exporter via Docker:
 
@@ -34,13 +39,116 @@ docker run -it --rm -p 9953:9953 -e "SPACELIFT_PROMEX_API_ENDPOINT=https://<acco
   public.ecr.aws/spacelift/promex
 ```
 
-### Port Number
+### Running in Kubernetes
+
+You can use the following Deployment definition to run the exporter:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spacelift-promex
+  labels:
+    app: spacelift-promex
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spacelift-promex
+  template:
+    metadata:
+      labels:
+        app: spacelift-promex
+    spec:
+      containers:
+        - name: spacelift-promex
+          image: public.ecr.aws/spacelift/promex:latest
+          ports:
+            - name: metrics
+              containerPort: 9953
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: metrics
+            periodSeconds: 5
+          env:
+            - name: "SPACELIFT_PROMEX_API_ENDPOINT"
+              value: "" # Add your endpoint here
+            - name: "SPACELIFT_PROMEX_API_KEY_ID"
+              value: "" # Add your API key here
+            - name: "SPACELIFT_PROMEX_API_KEY_SECRET"
+              value: "" # Add your secret here
+            - name: "SPACELIFT_PROMEX_LISTEN_ADDRESS"
+              value: ":9953"
+```
+
+To use the example deployment, make sure you fill in the API endpoint, API Key ID and API Key
+Secret, as explained in the comments. For a production deployment we would recommend making use of
+Kubernetes secrets rather than embedding the API key values directly.
+
+## Port Number
 
 By default the exporter listens on port 9953. To change this use the `--listen-address` flag or the
 `SPACELIFT_PROMEX_LISTEN_ADDRESS` environment variable:
 
 ```shell
 spacelift-promex serve --listen-address ":9999" --api-endpoint "https://<account>.app.spacelift.io" --api-key-id "<API Key ID>" --api-key-secret "<API Key Secret>"
+```
+
+## Help
+
+To get information about all the available commands and options, use the `help` command:
+
+```shell
+$ spacelift-promex help
+NAME:
+   spacelift-promex - Exports metrics from your Spacelift account to Prometheus
+
+USAGE:
+   spacelift-promex [global options] command [command options] [arguments...]
+
+VERSION:
+   0.0.1
+
+COMMANDS:
+   serve    Starts the Prometheus exporter
+   help, h  Shows a list of commands or help for one command
+
+GLOBAL OPTIONS:
+   --help, -h     show help (default: false)
+   --version, -v  print the version (default: false)
+
+
+COPYRIGHT:
+   Copyright (c) 2022 spacelift-io
+```
+
+To get information about an individual command, use the `--help` flag:
+
+```shell
+$ spacelift-promex serve --help
+NAME:
+   spacelift-promex serve - Starts the Prometheus exporter
+
+USAGE:
+   spacelift-promex serve [command options] [arguments...]
+
+OPTIONS:
+   --api-endpoint value, -e value    Your spacelift API endpoint (e.g. https://myaccount.app.spacelift.io) [$SPACELIFT_PROMEX_API_ENDPOINT]
+   --api-key-id value, -k value      Your spacelift API key ID [$SPACELIFT_PROMEX_API_KEY_ID]
+   --api-key-secret value, -s value  Your spacelift API key secret [$SPACELIFT_PROMEX_API_KEY_SECRET]
+   --is-development, -d              Uses settings appropriate during local development (default: false) [$SPACELIFT_PROMEX_IS_DEVELOPMENT]
+   --listen-address value, -l value  The address to listen on for HTTP requests (default: ":9953") [$SPACELIFT_PROMEX_LISTEN_ADDRESS]
+   --scrape-timeout value, -t value  The maximum duration to wait for a response from the Spacelift API during scraping (default: 5s) [$SPACELIFT_PROMEX_SCRAPE_TIMEOUT]
+```
+
+## Version
+
+To get version information, use the `--version` flag:
+
+```shell
+$ spacelift-promex --version
+spacelift-promex version 0.0.1
 ```
 
 ## Available Metrics
@@ -58,8 +166,8 @@ The following metrics are provided by the exporter:
 | `spacelift_worker_pool_workers_drained`                    | `worker_pool_id`, `worker_pool_name` | The number of workers in a worker pool that have been drained                                  |
 | `spacelift_current_billing_period_start_timestamp_seconds` |                                      | The timestamp of the start of the current billing period                                       |
 | `spacelift_current_billing_period_end_timestamp_seconds`   |                                      | The timestamp of the end of the current billing period                                         |
-| `spacelift_current_billing_period_used_private_minutes`    |                                      | The number of minutes used in the current billing period                                       |
-| `spacelift_current_billing_period_used_public_minutes`     |                                      | The number of minutes used in the current billing period                                       |
+| `spacelift_current_billing_period_used_private_minutes`    |                                      | The number of private minutes used in the current billing period                               |
+| `spacelift_current_billing_period_used_public_minutes`     |                                      | The number of public minutes used in the current billing period                                |
 | `spacelift_current_billing_period_used_seats`              |                                      | The number of seats used in the current billing period                                         |
 | `spacelift_current_billing_period_used_private_workers`    |                                      | The number of private workers used in the current billing period                               |
 | `spacelift_scrape_duration`                                |                                      | The duration in seconds of the request to the Spacelift API for metrics                        |
