@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -165,7 +166,7 @@ var serveCommand *cli.Command = &cli.Command{
 		}()
 
 		stop := make(chan os.Signal, 1)
-		signal.Notify(stop, os.Interrupt)
+		signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 
 		// Wait for interrupt signal to gracefully shutdown the server.
 		<-stop
