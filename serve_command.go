@@ -133,7 +133,11 @@ var serveCommand *cli.Command = &cli.Command{
 		// Create a new registry.
 		reg := prometheus.NewRegistry()
 
-		reg.MustRegister(newSpaceliftCollector(ctx, http.DefaultClient, session, scrapeTimeout))
+		collector, err := newSpaceliftCollector(ctx, http.DefaultClient, session, scrapeTimeout)
+		if err != nil {
+			return cli.Exit(fmt.Sprintf("could not create Spacelift collector: %v", err), ExitCodeStartupError)
+		}
+		reg.MustRegister(collector)
 
 		// Expose the registered metrics via HTTP.
 		http.Handle("/metrics", promhttp.HandlerFor(

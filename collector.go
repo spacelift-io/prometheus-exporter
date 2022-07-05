@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"runtime/debug"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -32,9 +34,15 @@ type spaceliftCollector struct {
 	currentBillingPeriodUsedSeats          *prometheus.Desc
 	currentBillingPeriodUsedPrivateWorkers *prometheus.Desc
 	scrapeDuration                         *prometheus.Desc
+	buildInfo                              *prometheus.Desc
 }
 
-func newSpaceliftCollector(ctx context.Context, httpClient *http.Client, session session.Session, scrapeTimeout time.Duration) prometheus.Collector {
+func newSpaceliftCollector(ctx context.Context, httpClient *http.Client, session session.Session, scrapeTimeout time.Duration) (prometheus.Collector, error) {
+	buildInfo, ok := debug.ReadBuildInfo()
+	if !ok {
+		return nil, errors.New("could not read build info")
+	}
+
 	return &spaceliftCollector{
 		ctx:           ctx,
 		logger:        logging.FromContext(ctx).Sugar(),
@@ -110,7 +118,12 @@ func newSpaceliftCollector(ctx context.Context, httpClient *http.Client, session
 			"The duration in seconds of the request to the Spacelift API for metrics",
 			nil,
 			nil),
-	}
+		buildInfo: prometheus.NewDesc(
+			"spacelift_build_info",
+			"Contains build information about the exporter",
+			nil,
+			prometheus.Labels{"version": version, "commit": commit, "goversion": buildInfo.GoVersion}),
+	}, nil
 }
 
 func (c *spaceliftCollector) Describe(descriptorChannel chan<- *prometheus.Desc) {
@@ -126,6 +139,7 @@ func (c *spaceliftCollector) Describe(descriptorChannel chan<- *prometheus.Desc)
 	descriptorChannel <- c.currentBillingPeriodUsedPublicSeconds
 	descriptorChannel <- c.currentBillingPeriodUsedSeats
 	descriptorChannel <- c.currentBillingPeriodUsedPrivateWorkers
+	descriptorChannel <- c.buildInfo
 }
 
 type metricsQuery struct {
@@ -185,6 +199,7 @@ func (c *spaceliftCollector) Collect(metricChannel chan<- prometheus.Metric) {
 		return
 	}
 
+	metricChannel <- prometheus.MustNewConstMetric(c.buildInfo, prometheus.GaugeValue, 1)
 	metricChannel <- prometheus.MustNewConstMetric(c.publicRunsPending, prometheus.GaugeValue, float64(query.PublicWorkerPool.PendingRuns))
 	metricChannel <- prometheus.MustNewConstMetric(c.publicWorkersBusy, prometheus.GaugeValue, float64(query.PublicWorkerPool.BusyWorkers))
 	metricChannel <- prometheus.MustNewConstMetric(c.publicParallelism, prometheus.GaugeValue, float64(query.PublicWorkerPool.Parallelism))
