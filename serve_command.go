@@ -156,7 +156,7 @@ var serveCommand *cli.Command = &cli.Command{
 
 		logger.Info("Ready for launch! Listening on ", listenAddress)
 
-		server := http.Server{Addr: listenAddress}
+		server := http.Server{Addr: listenAddress, ReadHeaderTimeout: time.Second * 5}
 
 		go func() {
 			if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
