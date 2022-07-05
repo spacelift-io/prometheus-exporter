@@ -10,13 +10,14 @@ import (
 )
 
 var version string = "local"
+var commit string = "devel"
 
 func main() {
 	app := &cli.App{
 		Name:      "spacelift-promex",
 		Usage:     "Exports metrics from your Spacelift account to Prometheus",
 		Commands:  []*cli.Command{serveCommand},
-		Version:   version,
+		Version:   fmt.Sprintf("%s - %s", version, commit),
 		Copyright: fmt.Sprintf("Copyright (c) %d spacelift-io", time.Now().Year()),
 	}
 
