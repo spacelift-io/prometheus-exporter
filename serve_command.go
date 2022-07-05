@@ -2,7 +2,9 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"time"
@@ -96,6 +98,10 @@ var serveCommand *cli.Command = &cli.Command{
 
 		if scrapeTimeout <= 0 {
 			return cli.Exit("scrape-timeout must be greater than 0", ExitCodeStartupError)
+		}
+
+		if url, err := url.Parse(apiEndpoint); err != nil || url.Scheme == "" || url.Host == "" {
+			return cli.Exit(fmt.Sprintf("api-endpoint %q does not seem to be a valid URL", apiEndpoint), ExitCodeStartupError)
 		}
 
 		logger.Info("Prepping exporter for lift-off")
