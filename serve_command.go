@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
@@ -134,10 +133,6 @@ var serveCommand *cli.Command = &cli.Command{
 		// Create a new registry.
 		reg := prometheus.NewRegistry()
 
-		// Add Go module build info.
-		reg.MustRegister(collectors.NewGoCollector(
-			collectors.WithGoCollections(collectors.GoRuntimeMemStatsCollection | collectors.GoRuntimeMetricsCollection),
-		))
 		reg.MustRegister(newSpaceliftCollector(ctx, http.DefaultClient, session, scrapeTimeout))
 
 		// Expose the registered metrics via HTTP.
