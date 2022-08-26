@@ -132,7 +132,6 @@ func (c *spaceliftCollector) Describe(descriptorChannel chan<- *prometheus.Desc)
 	descriptorChannel <- c.currentBillingPeriodUsedPrivateSeconds
 	descriptorChannel <- c.currentBillingPeriodUsedPublicSeconds
 	descriptorChannel <- c.currentBillingPeriodUsedSeats
-	descriptorChannel <- c.currentBillingPeriodUsedPrivateWorkers
 	descriptorChannel <- c.buildInfo
 }
 
