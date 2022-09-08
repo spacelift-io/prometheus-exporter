@@ -32,7 +32,6 @@ type spaceliftCollector struct {
 	currentBillingPeriodUsedPrivateSeconds *prometheus.Desc
 	currentBillingPeriodUsedPublicSeconds  *prometheus.Desc
 	currentBillingPeriodUsedSeats          *prometheus.Desc
-	currentBillingPeriodUsedPrivateWorkers *prometheus.Desc
 	scrapeDuration                         *prometheus.Desc
 	buildInfo                              *prometheus.Desc
 }
@@ -108,11 +107,6 @@ func newSpaceliftCollector(ctx context.Context, httpClient *http.Client, session
 			"The number of seats used in the current billing period",
 			nil,
 			nil),
-		currentBillingPeriodUsedPrivateWorkers: prometheus.NewDesc(
-			"spacelift_current_billing_period_used_private_workers",
-			"The number of private workers used in the current billing period",
-			nil,
-			nil),
 		scrapeDuration: prometheus.NewDesc(
 			"spacelift_scrape_duration_seconds",
 			"The duration in seconds of the request to the Spacelift API for metrics",
@@ -138,7 +132,6 @@ func (c *spaceliftCollector) Describe(descriptorChannel chan<- *prometheus.Desc)
 	descriptorChannel <- c.currentBillingPeriodUsedPrivateSeconds
 	descriptorChannel <- c.currentBillingPeriodUsedPublicSeconds
 	descriptorChannel <- c.currentBillingPeriodUsedSeats
-	descriptorChannel <- c.currentBillingPeriodUsedPrivateWorkers
 	descriptorChannel <- c.buildInfo
 }
 
@@ -164,7 +157,6 @@ type metricsQuery struct {
 		UsedPrivateMinutes int `graphql:"usedPrivateMinutes"`
 		UsedPublicMinutes  int `graphql:"usedPublicMinutes"`
 		UsedSeats          int `graphql:"usedSeats"`
-		UsedPrivateWorkers int `graphql:"usedWorkers"`
 	} `graphql:"usage"`
 }
 
@@ -208,7 +200,6 @@ func (c *spaceliftCollector) Collect(metricChannel chan<- prometheus.Metric) {
 	metricChannel <- prometheus.MustNewConstMetric(c.currentBillingPeriodUsedPrivateSeconds, prometheus.GaugeValue, float64(query.Usage.UsedPrivateMinutes*60))
 	metricChannel <- prometheus.MustNewConstMetric(c.currentBillingPeriodUsedPublicSeconds, prometheus.GaugeValue, float64(query.Usage.UsedPublicMinutes*60))
 	metricChannel <- prometheus.MustNewConstMetric(c.currentBillingPeriodUsedSeats, prometheus.GaugeValue, float64(query.Usage.UsedSeats))
-	metricChannel <- prometheus.MustNewConstMetric(c.currentBillingPeriodUsedPrivateWorkers, prometheus.GaugeValue, float64(query.Usage.UsedPrivateWorkers))
 
 	for _, workerPool := range query.WorkerPools {
 		metricChannel <- prometheus.MustNewConstMetric(c.workerPoolRunsPending, prometheus.GaugeValue, float64(workerPool.PendingRuns), workerPool.ID, workerPool.Name)
