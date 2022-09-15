@@ -18,6 +18,9 @@ The exporter uses
 to authenticate, and also needs to know your Spacelift account API endpoint. Your API endpoint is in
 the format `https://<account>.app.spacelift.io`, for example `https://my-account.app.spacelift.io`.
 
+**NOTE:** the API key you use must be an Admin key because some of the API fields used for the metrics
+require administrative access.
+
 ### Running via the Binary
 
 Download the exporter binary from our
