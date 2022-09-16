@@ -9,7 +9,7 @@
       "pluginName": "Prometheus"
     }
   ],
-  "__elements": [],
+  "__elements": {},
   "__requires": [
     {
       "type": "panel",
@@ -21,7 +21,7 @@
       "type": "grafana",
       "id": "grafana",
       "name": "Grafana",
-      "version": "9.0.1"
+      "version": "9.1.4"
     },
     {
       "type": "datasource",
@@ -93,6 +93,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
+      "description": "Shows the start of your billing period. This will only display if you have signed up for self-service via Stripe rather than being on an enterprise billing contract.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -130,6 +131,7 @@
         "y": 1
       },
       "id": 16,
+      "maxDataPoints": 999999,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -142,14 +144,14 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "9.0.1",
+      "pluginVersion": "9.1.4",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "editorMode": "code",
+          "editorMode": "builder",
           "exemplar": false,
           "expr": "max(spacelift_current_billing_period_start_timestamp_seconds) * 1000",
           "instant": true,
@@ -197,11 +199,12 @@
       },
       "gridPos": {
         "h": 6,
-        "w": 4,
+        "w": 5,
         "x": 5,
         "y": 1
       },
       "id": 19,
+      "maxDataPoints": 999999,
       "options": {
         "orientation": "auto",
         "reduceOptions": {
@@ -212,14 +215,14 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "9.0.1",
+      "pluginVersion": "9.1.4",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "editorMode": "code",
+          "editorMode": "explain",
           "exemplar": false,
           "expr": "max(spacelift_current_billing_period_used_public_seconds) / 60",
           "instant": true,
@@ -267,11 +270,12 @@
       },
       "gridPos": {
         "h": 6,
-        "w": 4,
-        "x": 9,
+        "w": 5,
+        "x": 10,
         "y": 1
       },
       "id": 18,
+      "maxDataPoints": 999999,
       "options": {
         "orientation": "auto",
         "reduceOptions": {
@@ -282,14 +286,14 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "9.0.1",
+      "pluginVersion": "9.1.4",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "editorMode": "code",
+          "editorMode": "explain",
           "exemplar": false,
           "expr": "max(spacelift_current_billing_period_used_private_seconds) / 60",
           "instant": true,
@@ -337,11 +341,12 @@
       },
       "gridPos": {
         "h": 6,
-        "w": 4,
-        "x": 13,
+        "w": 6,
+        "x": 15,
         "y": 1
       },
       "id": 20,
+      "maxDataPoints": 999999,
       "options": {
         "orientation": "auto",
         "reduceOptions": {
@@ -352,14 +357,14 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "9.0.1",
+      "pluginVersion": "9.1.4",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "editorMode": "code",
+          "editorMode": "builder",
           "exemplar": false,
           "expr": "max(spacelift_current_billing_period_used_seats)",
           "instant": true,
@@ -376,76 +381,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "max": 30,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "#EAB839",
-                "value": 6
-              },
-              {
-                "color": "red",
-                "value": 10
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 4,
-        "x": 17,
-        "y": 1
-      },
-      "id": 21,
-      "options": {
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      },
-      "pluginVersion": "9.0.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "exemplar": false,
-          "expr": "max(spacelift_current_billing_period_used_private_workers)",
-          "instant": true,
-          "legendFormat": "__auto",
-          "range": false,
-          "refId": "A"
-        }
-      ],
-      "title": "Used Private Workers",
-      "type": "gauge"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
+      "description": "Shows the end of your billing period. This will only display if you have signed up for self-service via Stripe rather than being on an enterprise billing contract.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -483,6 +419,7 @@
         "y": 3
       },
       "id": 17,
+      "maxDataPoints": 999999,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -495,7 +432,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "9.0.1",
+      "pluginVersion": "9.1.4",
       "targets": [
         {
           "datasource": {
@@ -519,7 +456,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "",
+      "description": "Shows the amount of time until your usage quota resets.. This will only display if you have signed up for self-service via Stripe rather than being on an enterprise billing contract.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -558,6 +495,7 @@
         "y": 5
       },
       "id": 26,
+      "maxDataPoints": 999999,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -570,7 +508,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "9.0.1",
+      "pluginVersion": "9.1.4",
       "targets": [
         {
           "datasource": {
@@ -637,6 +575,7 @@
         "y": 8
       },
       "id": 2,
+      "maxDataPoints": 999999,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -649,14 +588,14 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "9.0.1",
+      "pluginVersion": "9.1.4",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "editorMode": "code",
+          "editorMode": "explain",
           "exemplar": false,
           "expr": "max(spacelift_public_worker_pool_parallelism)",
           "instant": true,
@@ -679,6 +618,8 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
@@ -732,11 +673,13 @@
         "y": 8
       },
       "id": 25,
+      "maxDataPoints": 999999,
       "options": {
         "legend": {
           "calcs": ["max"],
           "displayMode": "table",
-          "placement": "right"
+          "placement": "right",
+          "showLegend": true
         },
         "tooltip": {
           "mode": "single",
@@ -749,7 +692,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "editorMode": "builder",
+          "editorMode": "explain",
           "exemplar": false,
           "expr": "max(spacelift_public_worker_pool_workers_busy)",
           "interval": "",
@@ -796,6 +739,7 @@
         "y": 11
       },
       "id": 3,
+      "maxDataPoints": 999999,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -808,14 +752,14 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "9.0.1",
+      "pluginVersion": "9.1.4",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "editorMode": "code",
+          "editorMode": "explain",
           "exemplar": false,
           "expr": "max(spacelift_public_worker_pool_workers_busy)",
           "instant": true,
@@ -862,6 +806,7 @@
         "y": 14
       },
       "id": 4,
+      "maxDataPoints": 999999,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -874,14 +819,14 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "9.0.1",
+      "pluginVersion": "9.1.4",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "editorMode": "code",
+          "editorMode": "explain",
           "exemplar": false,
           "expr": "max(spacelift_public_worker_pool_runs_pending)",
           "instant": true,
@@ -902,6 +847,7 @@
         "y": 17
       },
       "id": 8,
+      "maxDataPoints": 999999,
       "panels": [],
       "title": "Private Workers",
       "type": "row"
@@ -918,6 +864,8 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "axisSoftMax": 10,
@@ -970,11 +918,13 @@
         "y": 18
       },
       "id": 11,
+      "maxDataPoints": 999999,
       "options": {
         "legend": {
           "calcs": [],
           "displayMode": "list",
-          "placement": "right"
+          "placement": "right",
+          "showLegend": true
         },
         "tooltip": {
           "mode": "single",
@@ -1010,6 +960,8 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "axisSoftMax": 6,
@@ -1032,7 +984,7 @@
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "normal"
+              "mode": "none"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -1061,11 +1013,13 @@
         "y": 27
       },
       "id": 13,
+      "maxDataPoints": 99999,
       "options": {
         "legend": {
           "calcs": [],
           "displayMode": "list",
-          "placement": "right"
+          "placement": "right",
+          "showLegend": true
         },
         "tooltip": {
           "mode": "single",
@@ -1153,6 +1107,7 @@
         "y": 36
       },
       "id": 15,
+      "maxDataPoints": 999999,
       "options": {
         "footer": {
           "fields": "",
@@ -1162,14 +1117,14 @@
         "showHeader": true,
         "sortBy": []
       },
-      "pluginVersion": "9.0.1",
+      "pluginVersion": "9.1.4",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "editorMode": "code",
+          "editorMode": "explain",
           "exemplar": false,
           "expr": "max(spacelift_worker_pool_workers) by (worker_pool_id, worker_pool_name)",
           "format": "table",
@@ -1183,7 +1138,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "editorMode": "code",
+          "editorMode": "explain",
           "exemplar": false,
           "expr": "max(spacelift_worker_pool_workers_busy) by (worker_pool_id, worker_pool_name)",
           "format": "table",
@@ -1198,7 +1153,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "editorMode": "code",
+          "editorMode": "explain",
           "exemplar": false,
           "expr": "max(spacelift_worker_pool_runs_pending) by (worker_pool_id, worker_pool_name)",
           "format": "table",
@@ -1213,7 +1168,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "editorMode": "code",
+          "editorMode": "explain",
           "exemplar": false,
           "expr": "max(spacelift_worker_pool_workers_drained) by (worker_pool_id, worker_pool_name)",
           "format": "table",
@@ -1265,7 +1220,7 @@
     }
   ],
   "refresh": "30s",
-  "schemaVersion": 36,
+  "schemaVersion": 37,
   "style": "dark",
   "tags": [],
   "templating": {
@@ -1279,6 +1234,6 @@
   "timezone": "",
   "title": "Spacelift Monitoring",
   "uid": "CZvqn037z",
-  "version": 6,
+  "version": 7,
   "weekStart": ""
 }
