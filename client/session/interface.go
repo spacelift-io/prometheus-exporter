@@ -10,6 +10,7 @@ import (
 type Session interface {
 	BearerToken(ctx context.Context) (string, error)
 	Endpoint() string
+	RefreshToken(ctx context.Context) error
 }
 
 // Must provides a helper that either creates a Session or dies trying.
