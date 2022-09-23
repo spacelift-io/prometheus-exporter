@@ -33,7 +33,7 @@ jobs:
         with:
           name: dist
           path: |
-            dist/spacelift-promex_linux_amd64_v1
+            dist
 
   analyze:
     name: Analyze with Trivy
