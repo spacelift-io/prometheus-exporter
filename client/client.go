@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/shurcooL/graphql"
 	"golang.org/x/oauth2"
 
 	"github.com/spacelift-io/prometheus-exporter/client/session"
+	"github.com/spacelift-io/prometheus-exporter/logging"
 )
 
 type client struct {
@@ -25,19 +27,34 @@ func New(wraps *http.Client, session session.Session) Client {
 func (c *client) Mutate(ctx context.Context, mutation interface{}, variables map[string]interface{}) error {
 	apiClient, err := c.apiClient(ctx)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	return apiClient.Mutate(ctx, mutation, variables)
 }
 
 func (c *client) Query(ctx context.Context, query interface{}, variables map[string]interface{}) error {
+	logger := logging.FromContext(ctx).Sugar()
 	apiClient, err := c.apiClient(ctx)
 	if err != nil {
-		return nil
+		return err
 	}
 
-	return apiClient.Query(ctx, query, variables)
+	err = apiClient.Query(ctx, query, variables)
+	if err != nil && strings.Contains(err.Error(), "unauthorized") {
+		logger.Warn("Server returned an unauthorized response - retrying request with a new token")
+		c.session.RefreshToken(ctx)
+
+		// Try again in case refreshing the token fixes the problem
+		apiClient, err = c.apiClient(ctx)
+		if err != nil {
+			return err
+		}
+
+		err = apiClient.Query(ctx, query, variables)
+	}
+
+	return err
 }
 
 func (c *client) URL(format string, a ...interface{}) string {
