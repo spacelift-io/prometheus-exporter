@@ -19,8 +19,7 @@ type client struct {
 	session session.Session
 }
 
-// New returns a new instance of a Spacelift Client.
-func New(wraps *http.Client, session session.Session) Client {
+func New(wraps *http.Client, session session.Session) *client {
 	return &client{wraps: wraps, session: session}
 }
 
@@ -30,11 +29,20 @@ func (c *client) Mutate(ctx context.Context, mutation interface{}, variables map
 		return err
 	}
 
-	return apiClient.Mutate(ctx, mutation, variables)
+	err = apiClient.Mutate(ctx, mutation, variables)
+	if err != nil && strings.Contains(err.Error(), "unauthorized") {
+		logger := logging.FromContext(ctx).Sugar()
+		logger.Warn("Server returned an unauthorized response - retrying request with a new token")
+		c.session.RefreshToken(ctx)
+
+		// Try again in case refreshing the token fixes the problem
+		apiClient, err = c.apiClient(ctx)
+	}
+
+	return err
 }
 
 func (c *client) Query(ctx context.Context, query interface{}, variables map[string]interface{}) error {
-	logger := logging.FromContext(ctx).Sugar()
 	apiClient, err := c.apiClient(ctx)
 	if err != nil {
 		return err
@@ -42,32 +50,28 @@ func (c *client) Query(ctx context.Context, query interface{}, variables map[str
 
 	err = apiClient.Query(ctx, query, variables)
 	if err != nil && strings.Contains(err.Error(), "unauthorized") {
+		logger := logging.FromContext(ctx).Sugar()
 		logger.Warn("Server returned an unauthorized response - retrying request with a new token")
 		c.session.RefreshToken(ctx)
 
 		// Try again in case refreshing the token fixes the problem
 		apiClient, err = c.apiClient(ctx)
-		if err != nil {
-			return err
-		}
-
-		err = apiClient.Query(ctx, query, variables)
 	}
 
 	return err
 }
 
-func (c *client) URL(format string, a ...interface{}) string {
+func (c *client) URL(format string, a ...interface{}) (string, error) {
 	endpoint := c.session.Endpoint()
 
 	endpointURL, err := url.Parse(endpoint)
 	if err != nil {
-		panic(err) // Impossible condition.
+		return "", err
 	}
 
 	endpointURL.Path = fmt.Sprintf(format, a...)
 
-	return endpointURL.String()
+	return endpointURL.String(), nil
 }
 
 func (c *client) apiClient(ctx context.Context) (*graphql.Client, error) {
@@ -76,9 +80,4 @@ func (c *client) apiClient(ctx context.Context) (*graphql.Client, error) {
 		return nil, err
 	}
 
-	return graphql.NewClient(c.session.Endpoint(), oauth2.NewClient(
-		context.WithValue(ctx, oauth2.HTTPClient, c.wraps), oauth2.StaticTokenSource(
-			&oauth2.Token{AccessToken: bearerToken},
-		),
-	)), nil
-}
+	return graphql.NewClient(c.session.Endpoint(), oauth2.NewClient
