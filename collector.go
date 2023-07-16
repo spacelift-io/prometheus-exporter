@@ -32,6 +32,11 @@ type spaceliftCollector struct {
 	currentBillingPeriodUsedPrivateSeconds *prometheus.Desc
 	currentBillingPeriodUsedPublicSeconds  *prometheus.Desc
 	currentBillingPeriodUsedSeats          *prometheus.Desc
+	StackStateDiscarded                    *prometheus.Desc
+	StackStateFailed                       *prometheus.Desc
+	StackStateFinished                     *prometheus.Desc
+	StackStateNone                         *prometheus.Desc
+	totalStacksCount                       *prometheus.Desc
 	scrapeDuration                         *prometheus.Desc
 	buildInfo                              *prometheus.Desc
 }
@@ -47,6 +52,31 @@ func newSpaceliftCollector(ctx context.Context, httpClient *http.Client, session
 		logger:        logging.FromContext(ctx).Sugar(),
 		client:        client.New(httpClient, session),
 		scrapeTimeout: scrapeTimeout,
+		StackStateDiscarded: prometheus.NewDesc(
+			"Stack_State_DISCARDED",
+			"Stack state Discarded",
+			[]string{"stack_name"},
+			nil),
+		StackStateFailed: prometheus.NewDesc(
+			"Stack_State_FAILED",
+			"Stack state FAILED",
+			[]string{"stack_name"},
+			nil),
+		StackStateFinished: prometheus.NewDesc(
+			"Stack_State_FINISHED",
+			"Stack state FINISHED",
+			[]string{"stack_name"},
+			nil),
+		StackStateNone: prometheus.NewDesc(
+			"Stack_State_NONE",
+			"Stack state NONE",
+			[]string{"stack_name"},
+			nil),
+		totalStacksCount: prometheus.NewDesc(
+			"total_stacks_count",
+			"Total Stacks Count",
+			nil,
+			nil),
 		publicRunsPending: prometheus.NewDesc(
 			"spacelift_public_worker_pool_runs_pending",
 			"The number of runs in your account currently queued and waiting for a public worker",
@@ -132,6 +162,11 @@ func (c *spaceliftCollector) Describe(descriptorChannel chan<- *prometheus.Desc)
 	descriptorChannel <- c.currentBillingPeriodUsedPrivateSeconds
 	descriptorChannel <- c.currentBillingPeriodUsedPublicSeconds
 	descriptorChannel <- c.currentBillingPeriodUsedSeats
+	descriptorChannel <- c.StackStateDiscarded
+	descriptorChannel <- c.StackStateFailed
+	descriptorChannel <- c.StackStateFinished
+	descriptorChannel <- c.StackStateNone
+	descriptorChannel <- c.totalStacksCount
 	descriptorChannel <- c.buildInfo
 }
 
@@ -158,6 +193,18 @@ type metricsQuery struct {
 		UsedPublicMinutes  int `graphql:"usedPublicMinutes"`
 		UsedSeats          int `graphql:"usedSeats"`
 	} `graphql:"usage"`
+	Stacks []struct {
+		ID             string `graphql:"id"`
+		Name           string `graphql:"name"`
+		Administrative bool   `graphql:"administrative"`
+		CreatedAt      int    `graphql:"createdAt"`
+		Description    string `graphql:"description"`
+		State          string `graphql:"state"`
+		Runs           []struct {
+			IsMostRecent bool `graphql:"isMostRecent"`
+			Finished     bool `graphql:"finished"`
+		} `graphql:"runs"`
+	} `graphql:"stacks"`
 }
 
 func (c *spaceliftCollector) Collect(metricChannel chan<- prometheus.Metric) {
@@ -200,6 +247,30 @@ func (c *spaceliftCollector) Collect(metricChannel chan<- prometheus.Metric) {
 	metricChannel <- prometheus.MustNewConstMetric(c.currentBillingPeriodUsedPrivateSeconds, prometheus.GaugeValue, float64(query.Usage.UsedPrivateMinutes*60))
 	metricChannel <- prometheus.MustNewConstMetric(c.currentBillingPeriodUsedPublicSeconds, prometheus.GaugeValue, float64(query.Usage.UsedPublicMinutes*60))
 	metricChannel <- prometheus.MustNewConstMetric(c.currentBillingPeriodUsedSeats, prometheus.GaugeValue, float64(query.Usage.UsedSeats))
+
+	for _, stack := range query.Stacks {
+		isDiscarded := stack.State == "DISCARDED"
+		isFailed := stack.State == "FAILED"
+		isFinished := stack.State == "FINISHED"
+		isNone := stack.State == "NONE"
+		if isDiscarded {
+			discarded := 1
+			metricChannel <- prometheus.MustNewConstMetric(c.StackStateDiscarded, prometheus.GaugeValue, float64(discarded), stack.Name)
+		}
+		if isFailed {
+			discarded := 1
+			metricChannel <- prometheus.MustNewConstMetric(c.StackStateFailed, prometheus.GaugeValue, float64(discarded), stack.Name)
+		}
+		if isFinished {
+			discarded := 1
+			metricChannel <- prometheus.MustNewConstMetric(c.StackStateFinished, prometheus.GaugeValue, float64(discarded), stack.Name)
+		}
+		if isNone {
+			finished := 1
+			metricChannel <- prometheus.MustNewConstMetric(c.StackStateNone, prometheus.GaugeValue, float64(finished), stack.Name)
+		}
+	}
+	metricChannel <- prometheus.MustNewConstMetric(c.totalStacksCount, prometheus.GaugeValue, float64(len(query.Stacks)))
 
 	for _, workerPool := range query.WorkerPools {
 		metricChannel <- prometheus.MustNewConstMetric(c.workerPoolRunsPending, prometheus.GaugeValue, float64(workerPool.PendingRuns), workerPool.ID, workerPool.Name)
