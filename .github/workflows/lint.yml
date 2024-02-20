@@ -8,16 +8,14 @@ jobs:
   linting:
     name: Lint the code
     runs-on: ubuntu-latest
-    container: golang:1.18
 
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: go mod download
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
 
       - name: Lint the code using "golangci-lint"
-        run: |
-          wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.46.2
-          ./bin/golangci-lint run -v
+        uses: golangci/golangci-lint-action@v4
