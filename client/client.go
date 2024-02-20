@@ -2,9 +2,7 @@ package client
 
 import (
 	"context"
-	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/shurcooL/graphql"
@@ -22,15 +20,6 @@ type client struct {
 // New returns a new instance of a Spacelift Client.
 func New(wraps *http.Client, session session.Session) Client {
 	return &client{wraps: wraps, session: session}
-}
-
-func (c *client) Mutate(ctx context.Context, mutation interface{}, variables map[string]interface{}) error {
-	apiClient, err := c.apiClient(ctx)
-	if err != nil {
-		return err
-	}
-
-	return apiClient.Mutate(ctx, mutation, variables)
 }
 
 func (c *client) Query(ctx context.Context, query interface{}, variables map[string]interface{}) error {
@@ -55,19 +44,6 @@ func (c *client) Query(ctx context.Context, query interface{}, variables map[str
 	}
 
 	return err
-}
-
-func (c *client) URL(format string, a ...interface{}) string {
-	endpoint := c.session.Endpoint()
-
-	endpointURL, err := url.Parse(endpoint)
-	if err != nil {
-		panic(err) // Impossible condition.
-	}
-
-	endpointURL.Path = fmt.Sprintf(format, a...)
-
-	return endpointURL.String()
 }
 
 func (c *client) apiClient(ctx context.Context) (*graphql.Client, error) {
