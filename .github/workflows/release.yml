@@ -53,7 +53,6 @@ jobs:
     name: Build and deploy the image
     needs: goreleaser
     runs-on: ubuntu-latest
-    container: docker
     permissions:
       id-token: write
       contents: read
