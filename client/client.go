@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/shurcooL/graphql"
+	"github.com/hasura/go-graphql-client"
 	"golang.org/x/oauth2"
 
 	"github.com/spacelift-io/prometheus-exporter/client/session"
