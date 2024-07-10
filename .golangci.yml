@@ -102,8 +102,8 @@ linters:
     - ineffassign
     - nolintlint
     - staticcheck
-    - structcheck
     - typecheck
+    - unused
 
 severity:
   # Default value is empty string.
