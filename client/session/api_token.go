@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shurcooL/graphql"
+	"github.com/hasura/go-graphql-client"
 )
 
 // If the token is about to expire, we'd rather exchange it now than risk having
