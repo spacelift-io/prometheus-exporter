@@ -33,7 +33,7 @@ func (c *client) Query(ctx context.Context, query interface{}, variables map[str
 		req.Header.Add("Spacelift-Client-Type", "prometheus-exporter")
 	})
 
-	err = apiClient.Query(ctx, query, variables)
+	err = apiClient.Query(ctx, query, variables, graphql.OperationName("PrometheusExporter"))
 	if err != nil && strings.Contains(err.Error(), "unauthorized") {
 		logger.Warn("Server returned an unauthorized response - retrying request with a new token")
 		c.session.RefreshToken(ctx)
