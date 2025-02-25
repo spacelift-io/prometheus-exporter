@@ -8,11 +8,10 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/zap"
-
 	"github.com/spacelift-io/prometheus-exporter/client"
 	"github.com/spacelift-io/prometheus-exporter/client/session"
 	"github.com/spacelift-io/prometheus-exporter/logging"
+	"go.uber.org/zap"
 )
 
 type spaceliftCollector struct {
@@ -171,8 +170,8 @@ func (c *spaceliftCollector) Describe(descriptorChannel chan<- *prometheus.Desc)
 }
 
 type dataPoint struct {
-	Value    float64
-	Labels   []string
+	Value  float64
+	Labels []string
 }
 
 type metricsQuery struct {
@@ -199,11 +198,11 @@ type metricsQuery struct {
 		UsedSeats          int `graphql:"usedSeats"`
 	} `graphql:"usage"`
 	Metrics struct {
-		StacksCountByState []dataPoint `graphql:"stacksCountByState"`
-		ResourcesCountByDrift []dataPoint `graphql:"resourcesCountByDrift"`
+		StacksCountByState          []dataPoint `graphql:"stacksCountByState"`
+		ResourcesCountByDrift       []dataPoint `graphql:"resourcesCountByDrift"`
 		AvgStackSizeByResourceCount []dataPoint `graphql:"avgStackSizeByResourceCount"`
-		AverageRunDuration []dataPoint `graphql:"averageRunDuration"`
-		MedianRunDuration []dataPoint `graphql:"medianRunDuration"`
+		AverageRunDuration          []dataPoint `graphql:"averageRunDuration"`
+		MedianRunDuration           []dataPoint `graphql:"medianRunDuration"`
 	} `graphql:"metrics"`
 }
 
@@ -253,21 +252,21 @@ func (c *spaceliftCollector) Collect(metricChannel chan<- prometheus.Metric) {
 			metricChannel <- prometheus.MustNewConstMetric(c.currentStacksCountByState, prometheus.GaugeValue, state.Value, state.Labels[0])
 		}
 	}
-	
+
 	for _, state := range query.Metrics.ResourcesCountByDrift {
 		if len(state.Labels) > 0 {
 			metricChannel <- prometheus.MustNewConstMetric(c.currentResourcesCountByDrift, prometheus.GaugeValue, state.Value, state.Labels[0])
 		}
 	}
-	
+
 	if len(query.Metrics.AvgStackSizeByResourceCount) > 0 {
 		metricChannel <- prometheus.MustNewConstMetric(c.currentAvgStackSizeByResourceCount, prometheus.GaugeValue, query.Metrics.AvgStackSizeByResourceCount[0].Value)
 	}
-	
+
 	if len(query.Metrics.AverageRunDuration) > 0 {
 		metricChannel <- prometheus.MustNewConstMetric(c.currentAverageRunDuration, prometheus.GaugeValue, query.Metrics.AverageRunDuration[0].Value)
 	}
-	
+
 	if len(query.Metrics.MedianRunDuration) > 0 {
 		metricChannel <- prometheus.MustNewConstMetric(c.currentMedianRunDuration, prometheus.GaugeValue, query.Metrics.MedianRunDuration[0].Value)
 	}
