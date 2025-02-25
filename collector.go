@@ -32,6 +32,11 @@ type spaceliftCollector struct {
 	currentBillingPeriodUsedPrivateSeconds *prometheus.Desc
 	currentBillingPeriodUsedPublicSeconds  *prometheus.Desc
 	currentBillingPeriodUsedSeats          *prometheus.Desc
+	currentStacksCountByState              *prometheus.Desc
+	currentResourcesCountByDrift           *prometheus.Desc
+	currentAvgStackSizeByResourceCount     *prometheus.Desc
+	currentAverageRunDuration              *prometheus.Desc
+	currentMedianRunDuration               *prometheus.Desc
 	scrapeDuration                         *prometheus.Desc
 	buildInfo                              *prometheus.Desc
 }
@@ -107,6 +112,31 @@ func newSpaceliftCollector(ctx context.Context, httpClient *http.Client, session
 			"The number of seats used in the current billing period",
 			nil,
 			nil),
+		currentStacksCountByState: prometheus.NewDesc(
+			"spacelift_current_stacks_count_by_state",
+			"The number of stacks grouped by state",
+			[]string{"state"},
+			nil),
+		currentResourcesCountByDrift: prometheus.NewDesc(
+			"spacelift_current_resources_count_by_drift",
+			"The number of drifted resources",
+			[]string{"state"},
+			nil),
+		currentAvgStackSizeByResourceCount: prometheus.NewDesc(
+			"spacelift_current_avg_stack_size_by_resource_count",
+			"The average stack size by resource count",
+			nil,
+			nil),
+		currentAverageRunDuration: prometheus.NewDesc(
+			"spacelift_current_average_run_duration",
+			"The average run duration",
+			nil,
+			nil),
+		currentMedianRunDuration: prometheus.NewDesc(
+			"spacelift_current_median_run_duration",
+			"The median run duration",
+			nil,
+			nil),
 		scrapeDuration: prometheus.NewDesc(
 			"spacelift_scrape_duration_seconds",
 			"The duration in seconds of the request to the Spacelift API for metrics",
@@ -132,7 +162,17 @@ func (c *spaceliftCollector) Describe(descriptorChannel chan<- *prometheus.Desc)
 	descriptorChannel <- c.currentBillingPeriodUsedPrivateSeconds
 	descriptorChannel <- c.currentBillingPeriodUsedPublicSeconds
 	descriptorChannel <- c.currentBillingPeriodUsedSeats
+	descriptorChannel <- c.currentStacksCountByState
+	descriptorChannel <- c.currentResourcesCountByDrift
+	descriptorChannel <- c.currentAvgStackSizeByResourceCount
+	descriptorChannel <- c.currentAverageRunDuration
+	descriptorChannel <- c.currentMedianRunDuration
 	descriptorChannel <- c.buildInfo
+}
+
+type dataPoint struct {
+	Value  float64
+	Labels []string
 }
 
 type metricsQuery struct {
@@ -158,6 +198,13 @@ type metricsQuery struct {
 		UsedPublicMinutes  int `graphql:"usedPublicMinutes"`
 		UsedSeats          int `graphql:"usedSeats"`
 	} `graphql:"usage"`
+	Metrics struct {
+		StacksCountByState          []dataPoint `graphql:"stacksCountByState"`
+		ResourcesCountByDrift       []dataPoint `graphql:"resourcesCountByDrift"`
+		AvgStackSizeByResourceCount []dataPoint `graphql:"avgStackSizeByResourceCount"`
+		AverageRunDuration          []dataPoint `graphql:"averageRunDuration"`
+		MedianRunDuration           []dataPoint `graphql:"medianRunDuration"`
+	} `graphql:"metrics"`
 }
 
 func (c *spaceliftCollector) Collect(metricChannel chan<- prometheus.Metric) {
@@ -200,6 +247,30 @@ func (c *spaceliftCollector) Collect(metricChannel chan<- prometheus.Metric) {
 	metricChannel <- prometheus.MustNewConstMetric(c.currentBillingPeriodUsedPrivateSeconds, prometheus.GaugeValue, float64(query.Usage.UsedPrivateMinutes*60))
 	metricChannel <- prometheus.MustNewConstMetric(c.currentBillingPeriodUsedPublicSeconds, prometheus.GaugeValue, float64(query.Usage.UsedPublicMinutes*60))
 	metricChannel <- prometheus.MustNewConstMetric(c.currentBillingPeriodUsedSeats, prometheus.GaugeValue, float64(query.Usage.UsedSeats))
+
+	for _, state := range query.Metrics.StacksCountByState {
+		if len(state.Labels) > 0 {
+			metricChannel <- prometheus.MustNewConstMetric(c.currentStacksCountByState, prometheus.GaugeValue, state.Value, state.Labels[0])
+		}
+	}
+
+	for _, state := range query.Metrics.ResourcesCountByDrift {
+		if len(state.Labels) > 0 {
+			metricChannel <- prometheus.MustNewConstMetric(c.currentResourcesCountByDrift, prometheus.GaugeValue, state.Value, state.Labels[0])
+		}
+	}
+
+	if len(query.Metrics.AvgStackSizeByResourceCount) > 0 {
+		metricChannel <- prometheus.MustNewConstMetric(c.currentAvgStackSizeByResourceCount, prometheus.GaugeValue, query.Metrics.AvgStackSizeByResourceCount[0].Value)
+	}
+
+	if len(query.Metrics.AverageRunDuration) > 0 {
+		metricChannel <- prometheus.MustNewConstMetric(c.currentAverageRunDuration, prometheus.GaugeValue, query.Metrics.AverageRunDuration[0].Value)
+	}
+
+	if len(query.Metrics.MedianRunDuration) > 0 {
+		metricChannel <- prometheus.MustNewConstMetric(c.currentMedianRunDuration, prometheus.GaugeValue, query.Metrics.MedianRunDuration[0].Value)
+	}
 
 	for _, workerPool := range query.WorkerPools {
 		metricChannel <- prometheus.MustNewConstMetric(c.workerPoolRunsPending, prometheus.GaugeValue, float64(workerPool.PendingRuns), workerPool.ID, workerPool.Name)
