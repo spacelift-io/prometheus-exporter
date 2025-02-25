@@ -122,17 +122,17 @@ func newSpaceliftCollector(ctx context.Context, httpClient *http.Client, session
 			"The number of drifted resources",
 			[]string{"state"},
 			nil),
-		currentAvgStackSizeByResourceCount : prometheus.NewDesc(
+		currentAvgStackSizeByResourceCount: prometheus.NewDesc(
 			"spacelift_current_avg_stack_size_by_resource_count",
 			"The average stack size by resource count",
 			nil,
 			nil),
-		currentAverageRunDuration : prometheus.NewDesc(
+		currentAverageRunDuration: prometheus.NewDesc(
 			"spacelift_current_average_run_duration",
 			"The average run duration",
 			nil,
 			nil),
-		currentMedianRunDuration : prometheus.NewDesc(
+		currentMedianRunDuration: prometheus.NewDesc(
 			"spacelift_current_median_run_duration",
 			"The median run duration",
 			nil,
