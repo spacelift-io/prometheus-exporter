@@ -17,7 +17,9 @@ run:
 output:
   # colored-line-number|line-number|json|tab|checkstyle|code-climate|junit-xml|github-actions
   # default is "colored-line-number"
-  format: colored-line-number
+  formats:
+    - format: colored-line-number
+      path: stdout
 
   # print lines of code with issue, default is true
   print-issued-lines: true
@@ -49,7 +51,6 @@ linters-settings:
     min-len: 2
     min-occurrences: 2
   staticcheck:
-    go: "1.18"
     checks: ["all", "-SA1019"]
   gocritic:
     enabled-tags:
@@ -89,8 +90,8 @@ linters-settings:
 linters:
   disable-all: true
   enable:
+    - copyloopvar
     - depguard
-    - exportloopref
     - gci
     - gocritic
     - gofmt

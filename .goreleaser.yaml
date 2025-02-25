@@ -1,3 +1,5 @@
+version: 2
+
 project_name: spacelift-promex
 
 before:
@@ -44,4 +46,4 @@ release:
     - glob: ./key.*
 
 changelog:
-  skip: true
+  disable: true
