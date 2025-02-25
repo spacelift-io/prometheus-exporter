@@ -249,16 +249,28 @@ func (c *spaceliftCollector) Collect(metricChannel chan<- prometheus.Metric) {
 	metricChannel <- prometheus.MustNewConstMetric(c.currentBillingPeriodUsedSeats, prometheus.GaugeValue, float64(query.Usage.UsedSeats))
 
 	for _, state := range query.Metrics.StacksCountByState {
-		metricChannel <- prometheus.MustNewConstMetric(c.currentStacksCountByState, prometheus.GaugeValue, state.Value, state.Labels[0])
-	}
-
-	for _, state := range query.Metrics.ResourcesCountByDrift {
-		metricChannel <- prometheus.MustNewConstMetric(c.currentResourcesCountByDrift, prometheus.GaugeValue, state.Value, state.Labels[0])
+		if len(state.Labels) > 0 {
+			metricChannel <- prometheus.MustNewConstMetric(c.currentStacksCountByState, prometheus.GaugeValue, state.Value, state.Labels[0])
+		}
 	}
 	
-	metricChannel <- prometheus.MustNewConstMetric(c.currentAvgStackSizeByResourceCount, prometheus.GaugeValue, float64(query.Metrics.AvgStackSizeByResourceCount[0].Value))
-	metricChannel <- prometheus.MustNewConstMetric(c.currentAverageRunDuration, prometheus.GaugeValue, float64(query.Metrics.AverageRunDuration[0].Value))
-	metricChannel <- prometheus.MustNewConstMetric(c.currentMedianRunDuration, prometheus.GaugeValue, float64(query.Metrics.MedianRunDuration[0].Value))
+	for _, state := range query.Metrics.ResourcesCountByDrift {
+		if len(state.Labels) > 0 {
+			metricChannel <- prometheus.MustNewConstMetric(c.currentResourcesCountByDrift, prometheus.GaugeValue, state.Value, state.Labels[0])
+		}
+	}
+	
+	if len(query.Metrics.AvgStackSizeByResourceCount) > 0 {
+		metricChannel <- prometheus.MustNewConstMetric(c.currentAvgStackSizeByResourceCount, prometheus.GaugeValue, query.Metrics.AvgStackSizeByResourceCount[0].Value)
+	}
+	
+	if len(query.Metrics.AverageRunDuration) > 0 {
+		metricChannel <- prometheus.MustNewConstMetric(c.currentAverageRunDuration, prometheus.GaugeValue, query.Metrics.AverageRunDuration[0].Value)
+	}
+	
+	if len(query.Metrics.MedianRunDuration) > 0 {
+		metricChannel <- prometheus.MustNewConstMetric(c.currentMedianRunDuration, prometheus.GaugeValue, query.Metrics.MedianRunDuration[0].Value)
+	}
 
 	for _, workerPool := range query.WorkerPools {
 		metricChannel <- prometheus.MustNewConstMetric(c.workerPoolRunsPending, prometheus.GaugeValue, float64(workerPool.PendingRuns), workerPool.ID, workerPool.Name)
