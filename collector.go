@@ -114,7 +114,7 @@ func newSpaceliftCollector(ctx context.Context, httpClient *http.Client, session
 			nil),
 		currentStacksCountByState: prometheus.NewDesc(
 			"spacelift_current_stacks_count_by_state",
-			"The number of stacks by certain stacks",
+			"The number of stacks grouped by state",
 			[]string{"state"},
 			nil),
 		currentResourcesCountByDrift: prometheus.NewDesc(
