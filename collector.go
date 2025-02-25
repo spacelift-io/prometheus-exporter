@@ -1,17 +1,18 @@
 package main
 
 import (
-	"context"
-	"errors"
-	"net/http"
-	"runtime/debug"
-	"time"
+    "context"
+    "errors"
+    "net/http"
+    "runtime/debug"
+    "time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/spacelift-io/prometheus-exporter/client"
-	"github.com/spacelift-io/prometheus-exporter/client/session"
-	"github.com/spacelift-io/prometheus-exporter/logging"
-	"go.uber.org/zap"
+    "github.com/prometheus/client_golang/prometheus"
+    "go.uber.org/zap"
+
+    "github.com/spacelift-io/prometheus-exporter/client"
+    "github.com/spacelift-io/prometheus-exporter/client/session"
+    "github.com.spacelift-io/prometheus-exporter/logging"
 )
 
 type spaceliftCollector struct {
