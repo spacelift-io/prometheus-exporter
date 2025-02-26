@@ -52,7 +52,7 @@ func (c *client) apiClient(ctx context.Context) (*graphql.Client, error) {
 		return nil, err
 	}
 
-	return graphql.NewClient(c.session.Endpoint(), http.DefaultClient).WithRequestModifier(func(r *http.Request) {
+	return graphql.NewClient(c.session.Endpoint(), c.wraps).WithRequestModifier(func(r *http.Request) {
 		r.Header.Add("Spacelift-Client-Type", "prometheus-exporter")
 		r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", bearerToken))
 	}), nil
