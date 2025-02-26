@@ -1,4 +1,4 @@
-name: Security
+name: 🔐 Security
 
 on:
   push: { branches: [main] }
@@ -38,6 +38,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Note that gosec is already part of golangci-lint, but here we're more interested
+      # in uploading the results of the scan.
       - name: Run GoSec Security Scanner
         uses: securego/gosec@master
         with:

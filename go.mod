@@ -1,6 +1,6 @@
 module github.com/spacelift-io/prometheus-exporter
 
-go 1.21
+go 1.23
 
 require (
 	github.com/hasura/go-graphql-client v0.13.1
@@ -8,8 +8,6 @@ require (
 	github.com/prometheus/client_golang v1.21.0
 	github.com/urfave/cli/v2 v2.27.5
 	go.uber.org/zap v1.27.0
-	golang.org/x/net v0.33.0
-	golang.org/x/oauth2 v0.24.0
 )
 
 require (

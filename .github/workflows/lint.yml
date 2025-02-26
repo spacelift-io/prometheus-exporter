@@ -1,4 +1,4 @@
-name: Lint
+name: 🤓 Lint
 
 on:
   push: { branches: [main] }
@@ -18,4 +18,4 @@ jobs:
         with: { go-version-file: go.mod }
 
       - name: Lint the code using "golangci-lint"
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v6

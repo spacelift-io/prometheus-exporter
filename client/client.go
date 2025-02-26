@@ -2,11 +2,11 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/hasura/go-graphql-client"
-	"golang.org/x/oauth2"
 
 	"github.com/spacelift-io/prometheus-exporter/client/session"
 	"github.com/spacelift-io/prometheus-exporter/logging"
@@ -28,10 +28,6 @@ func (c *client) Query(ctx context.Context, query interface{}, variables map[str
 	if err != nil {
 		return err
 	}
-
-	apiClient.WithRequestModifier(func(req *http.Request) {
-		req.Header.Add("Spacelift-Client-Type", "prometheus-exporter")
-	})
 
 	err = apiClient.Query(ctx, query, variables, graphql.OperationName("PrometheusExporter"))
 	if err != nil && strings.Contains(err.Error(), "unauthorized") {
@@ -56,9 +52,8 @@ func (c *client) apiClient(ctx context.Context) (*graphql.Client, error) {
 		return nil, err
 	}
 
-	return graphql.NewClient(c.session.Endpoint(), oauth2.NewClient(
-		context.WithValue(ctx, oauth2.HTTPClient, c.wraps), oauth2.StaticTokenSource(
-			&oauth2.Token{AccessToken: bearerToken},
-		),
-	)), nil
+	return graphql.NewClient(c.session.Endpoint(), c.wraps).WithRequestModifier(func(r *http.Request) {
+		r.Header.Add("Spacelift-Client-Type", "prometheus-exporter")
+		r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", bearerToken))
+	}), nil
 }
