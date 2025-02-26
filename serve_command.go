@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,7 +15,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
-	"golang.org/x/net/context"
 
 	"github.com/spacelift-io/prometheus-exporter/client/session"
 	"github.com/spacelift-io/prometheus-exporter/logging"

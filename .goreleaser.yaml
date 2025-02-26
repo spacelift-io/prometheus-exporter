@@ -1,4 +1,5 @@
 project_name: spacelift-promex
+version: 2
 
 before:
   hooks:
@@ -44,4 +45,4 @@ release:
     - glob: ./key.*
 
 changelog:
-  skip: true
+  use: github-native
