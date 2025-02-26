@@ -1,4 +1,4 @@
-name: Trivy
+name: 👮 Trivy
 
 on:
   push:
