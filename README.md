@@ -172,6 +172,11 @@ The following metrics are provided by the exporter:
 | `spacelift_current_billing_period_used_private_seconds`    |                                      | The amount of private worker usage in the current billing period                               |
 | `spacelift_current_billing_period_used_public_seconds`     |                                      | The amount of public worker usage in the current billing period                                |
 | `spacelift_current_billing_period_used_seats`              |                                      | The number of seats used in the current billing period                                         |
+| `spacelift_current_stacks_count_by_state`                  | `state`                              | The number of stacks grouped by state                                                          |
+| `spacelift_current_resources_count_by_drift`               | `state`                              | The number of resources by drift                                                               |
+| `spacelift_current_avg_stack_size_by_resource_count`       |                                      | The average stack size by resource count                                                       |
+| `spacelift_current_average_run_duration`                   |                                      | The average run duration                                                                       |
+| `spacelift_current_median_run_duration`                    |                                      | The median run duration                                                                        |
 | `spacelift_scrape_duration`                                |                                      | The duration in seconds of the request to the Spacelift API for metrics                        |
 | `spacelift_build_info`                                     |                                      | Contains build information about the exporter (version, commit, etc)                           |
 
