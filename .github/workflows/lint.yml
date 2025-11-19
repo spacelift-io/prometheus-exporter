@@ -11,11 +11,11 @@ jobs:
 
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with: { go-version-file: go.mod }
 
       - name: Lint the code using "golangci-lint"
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9

@@ -6,14 +6,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 	"go.uber.org/zap"
 
 	"github.com/spacelift-io/prometheus-exporter/client/session"
@@ -27,7 +24,7 @@ var (
 		Aliases:     []string{"l"},
 		Value:       ":9953",
 		Usage:       "The address to listen on for HTTP requests",
-		EnvVars:     []string{"SPACELIFT_PROMEX_LISTEN_ADDRESS"},
+		Sources:     cli.EnvVars("SPACELIFT_PROMEX_LISTEN_ADDRESS"),
 		Destination: &listenAddress,
 	}
 
@@ -36,7 +33,7 @@ var (
 		Name:        "api-endpoint",
 		Aliases:     []string{"e"},
 		Usage:       "Your spacelift API endpoint (e.g. https://myaccount.app.spacelift.io)",
-		EnvVars:     []string{"SPACELIFT_PROMEX_API_ENDPOINT"},
+		Sources:     cli.EnvVars("SPACELIFT_PROMEX_API_ENDPOINT"),
 		Required:    true,
 		Destination: &apiEndpoint,
 	}
@@ -46,7 +43,7 @@ var (
 		Name:        "api-key-id",
 		Aliases:     []string{"k"},
 		Usage:       "Your spacelift API key ID",
-		EnvVars:     []string{"SPACELIFT_PROMEX_API_KEY_ID"},
+		Sources:     cli.EnvVars("SPACELIFT_PROMEX_API_KEY_ID"),
 		Required:    true,
 		Destination: &apiKeyID,
 	}
@@ -56,7 +53,7 @@ var (
 		Name:        "api-key-secret",
 		Aliases:     []string{"s"},
 		Usage:       "Your spacelift API key secret",
-		EnvVars:     []string{"SPACELIFT_PROMEX_API_KEY_SECRET"},
+		Sources:     cli.EnvVars("SPACELIFT_PROMEX_API_KEY_SECRET"),
 		Required:    true,
 		Destination: &apiKeySecret,
 	}
@@ -66,7 +63,7 @@ var (
 		Name:        "is-development",
 		Aliases:     []string{"d"},
 		Usage:       "Uses settings appropriate during local development",
-		EnvVars:     []string{"SPACELIFT_PROMEX_IS_DEVELOPMENT"},
+		Sources:     cli.EnvVars("SPACELIFT_PROMEX_IS_DEVELOPMENT"),
 		Destination: &isDevelopment,
 	}
 
@@ -75,7 +72,7 @@ var (
 		Name:        "scrape-timeout",
 		Aliases:     []string{"t"},
 		Usage:       "The maximum duration to wait for a response from the Spacelift API during scraping",
-		EnvVars:     []string{"SPACELIFT_PROMEX_SCRAPE_TIMEOUT"},
+		Sources:     cli.EnvVars("SPACELIFT_PROMEX_SCRAPE_TIMEOUT"),
 		Value:       time.Second * 5,
 		Destination: &scrapeTimeout,
 	}
@@ -92,8 +89,8 @@ var serveCommand *cli.Command = &cli.Command{
 		flagIsDevelopment,
 		flagScrapeTimeout,
 	},
-	Action: func(cliCtx *cli.Context) error {
-		ctx := logging.Init(cliCtx.Context, isDevelopment)
+	Action: func(ctx context.Context, cmd *cli.Command) error {
+		ctx = logging.Init(ctx, isDevelopment)
 		logger := logging.FromContext(ctx).Sugar()
 
 		if scrapeTimeout <= 0 {
@@ -152,7 +149,7 @@ var serveCommand *cli.Command = &cli.Command{
 			w.Write([]byte("Countdown complete - ready to serve metrics!"))
 		}))
 
-		listenAddress := cliCtx.String(flagListenAddress.Name)
+		listenAddress := cmd.String(flagListenAddress.Name)
 
 		logger.Info("Ready for launch! Listening on ", listenAddress)
 
@@ -164,11 +161,8 @@ var serveCommand *cli.Command = &cli.Command{
 			}
 		}()
 
-		stop := make(chan os.Signal, 1)
-		signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
-
 		// Wait for interrupt signal to gracefully shutdown the server.
-		<-stop
+		<-ctx.Done()
 
 		logger.Info("Received stop signal - shutting down exporter")
 
