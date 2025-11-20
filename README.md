@@ -172,8 +172,8 @@ The following metrics are provided by the exporter:
 | `spacelift_current_billing_period_used_private_seconds`    |                                      | The amount of private worker usage in the current billing period                               |
 | `spacelift_current_billing_period_used_public_seconds`     |                                      | The amount of public worker usage in the current billing period                                |
 | `spacelift_current_billing_period_used_seats`              |                                      | The number of seats used in the current billing period                                         |
-| `spacelift_current_stacks_count_by_state`                  | `state`                              | The number of stacks grouped by state                                                          |
-| `spacelift_current_resources_count_by_drift`               | `state`                              | The number of resources by drift                                                               |
+| `spacelift_current_stacks_count_by_state`                  | `state`, `stack`, `space`            | The number of stacks grouped by state                                                          |
+| `spacelift_current_resources_count_by_drift`               | `state`, `stack`, `space`            | The number of resources by drift                                                               |
 | `spacelift_current_avg_stack_size_by_resource_count`       |                                      | The average stack size by resource count                                                       |
 | `spacelift_current_average_run_duration`                   |                                      | The average run duration                                                                       |
 | `spacelift_current_median_run_duration`                    |                                      | The median run duration                                                                        |
@@ -184,3 +184,146 @@ The following metrics are provided by the exporter:
 
 If you're looking for inspiration, you can find an example Grafana dashboard
 [here](examples/example-dashboard.json).
+
+## Development
+
+### Running Tests
+
+The project includes unit tests to validate the metric configurations and ensure proper label handling.
+
+#### Prerequisites
+
+- Go 1.20 or later installed
+- Project dependencies installed (run `go mod tidy` if needed)
+
+#### Run All Tests
+
+To run all tests in the project:
+
+```shell
+go test -v
+```
+
+#### Run Specific Tests
+
+To run a specific test by name:
+
+```shell
+go test -v -run TestMetricLabels
+```
+
+#### What the Tests Validate
+
+The `TestMetricLabels` test validates:
+
+1. **Label Configuration**: Ensures that `spacelift_current_stacks_count_by_state` and `spacelift_current_resources_count_by_drift` metrics are configured with exactly 3 labels: `state`, `stack`, and `space`
+2. **Metric Creation**: Verifies that metrics can be successfully created with all 3 required labels
+3. **Label Validation**: Confirms that attempting to create metrics with an incorrect number of labels will fail (as expected)
+
+This test is particularly important after changes to metric label configurations to ensure backward compatibility and correct Prometheus metric exposition.
+
+#### Building the Project
+
+To build the exporter binary:
+
+```shell
+go build -o spacelift-promex
+```
+
+Or use the Makefile:
+
+```shell
+make build
+```
+
+#### Running Tests Before Commits
+
+It's recommended to run the full test suite before committing changes:
+
+```shell
+go test ./...
+```
+
+Or use the Makefile:
+
+```shell
+make test
+```
+
+This ensures all tests pass across the entire codebase.
+
+#### Building Releases with GoReleaser
+
+The project uses [GoReleaser](https://goreleaser.com/) to build releases. Several Make targets are available:
+
+```shell
+# Check if the goreleaser config is valid
+make check-goreleaser
+
+# Build a local snapshot release (no git tag required, won't publish)
+make snapshot
+
+# Create a full release (requires a git tag and will publish to GitHub)
+make release
+```
+
+**Building a Snapshot:**
+
+Snapshots are useful for testing the build process locally without creating a release:
+
+```shell
+make snapshot
+```
+
+This will create builds for all configured platforms in the `dist/` directory.
+
+**Creating a Release:**
+
+To create a full release, you need to:
+
+1. Tag your commit with a version:
+   ```shell
+   git tag -a v1.0.0 -m "Release v1.0.0"
+   git push origin v1.0.0
+   ```
+
+2. Run the release command:
+   ```shell
+   make release
+   ```
+
+This will build binaries for all platforms, create archives, generate checksums, and publish the release to GitHub.
+
+### Local Testing with Curl
+
+To verify the metrics are exposed correctly with the proper labels, you can start the exporter locally and use curl to inspect the output:
+
+```shell
+# Start the exporter (requires valid API credentials)
+./spacelift-promex serve --api-endpoint "https://<account>.app.spacelift.io" \
+  --api-key-id "<API Key ID>" \
+  --api-key-secret "<API Key Secret>"
+
+# In another terminal, fetch the metrics
+curl -s http://localhost:9953/metrics | grep -E "(spacelift_current_stacks_count_by_state|spacelift_current_resources_count_by_drift)"
+```
+
+#### Example Output
+
+The metrics with the `stack` and `space` labels should appear like this:
+
+```
+# HELP spacelift_current_stacks_count_by_state The number of stacks grouped by state
+# TYPE spacelift_current_stacks_count_by_state gauge
+spacelift_current_stacks_count_by_state{space="root",stack="infrastructure-prod",state="FINISHED"} 1
+spacelift_current_stacks_count_by_state{space="root",stack="infrastructure-staging",state="FINISHED"} 1
+spacelift_current_stacks_count_by_state{space="engineering",stack="application-api",state="FINISHED"} 1
+
+# HELP spacelift_current_resources_count_by_drift The number of resources by drift
+# TYPE spacelift_current_resources_count_by_drift gauge
+spacelift_current_resources_count_by_drift{space="root",stack="infrastructure-prod",state="DRIFTED"} 2
+spacelift_current_resources_count_by_drift{space="root",stack="infrastructure-prod",state="OK"} 45
+spacelift_current_resources_count_by_drift{space="engineering",stack="application-api",state="OK"} 23
+```
+
+These examples demonstrate that both metrics now include the `state`, `stack`, and `space` labels, allowing for more granular monitoring and alerting in Prometheus/Grafana.

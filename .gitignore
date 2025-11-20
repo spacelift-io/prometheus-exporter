@@ -3,6 +3,10 @@ node_modules
 
 dist/
 
+# Compiled binaries
+prometheus-exporter
+spacelift-promex
+
 # Ignore GPG public keys produced during release process, otherwise goreleaser fails because
 # the git state is dirty.
 key.*

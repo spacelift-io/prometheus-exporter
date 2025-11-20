@@ -115,12 +115,12 @@ func newSpaceliftCollector(ctx context.Context, httpClient *http.Client, session
 		currentStacksCountByState: prometheus.NewDesc(
 			"spacelift_current_stacks_count_by_state",
 			"The number of stacks grouped by state",
-			[]string{"state"},
+			[]string{"state", "stack", "space"},
 			nil),
 		currentResourcesCountByDrift: prometheus.NewDesc(
 			"spacelift_current_resources_count_by_drift",
 			"The number of drifted resources",
-			[]string{"state"},
+			[]string{"state", "stack", "space"},
 			nil),
 		currentAvgStackSizeByResourceCount: prometheus.NewDesc(
 			"spacelift_current_avg_stack_size_by_resource_count",
@@ -252,15 +252,29 @@ func (c *spaceliftCollector) Collect(metricChannel chan<- prometheus.Metric) {
 	metricChannel <- prometheus.MustNewConstMetric(c.currentBillingPeriodUsedSeats, prometheus.GaugeValue, float64(query.Usage.UsedSeats))
 
 	for _, state := range query.Metrics.StacksCountByState {
-		if len(state.Labels) > 0 {
-			metricChannel <- prometheus.MustNewConstMetric(c.currentStacksCountByState, prometheus.GaugeValue, state.Value, state.Labels[0])
+		// Ensure we always have 3 labels, filling in defaults for missing ones
+		labels := make([]string, 3)
+		for i := 0; i < 3 && i < len(state.Labels); i++ {
+			labels[i] = state.Labels[i]
 		}
+		// Fill remaining labels with "unknown" if not provided by API
+		for i := len(state.Labels); i < 3; i++ {
+			labels[i] = "unknown"
+		}
+		metricChannel <- prometheus.MustNewConstMetric(c.currentStacksCountByState, prometheus.GaugeValue, state.Value, labels[0], labels[1], labels[2])
 	}
 
 	for _, state := range query.Metrics.ResourcesCountByDrift {
-		if len(state.Labels) > 0 {
-			metricChannel <- prometheus.MustNewConstMetric(c.currentResourcesCountByDrift, prometheus.GaugeValue, state.Value, state.Labels[0])
+		// Ensure we always have 3 labels, filling in defaults for missing ones
+		labels := make([]string, 3)
+		for i := 0; i < 3 && i < len(state.Labels); i++ {
+			labels[i] = state.Labels[i]
 		}
+		// Fill remaining labels with "unknown" if not provided by API
+		for i := len(state.Labels); i < 3; i++ {
+			labels[i] = "unknown"
+		}
+		metricChannel <- prometheus.MustNewConstMetric(c.currentResourcesCountByDrift, prometheus.GaugeValue, state.Value, labels[0], labels[1], labels[2])
 	}
 
 	if len(query.Metrics.AvgStackSizeByResourceCount) > 0 {
