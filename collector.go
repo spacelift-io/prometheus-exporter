@@ -212,6 +212,9 @@ func (c *spaceliftCollector) Collect(metricChannel chan<- prometheus.Metric) {
 
 	start := time.Now()
 	err := func() error {
+		// The reason this is wrapped in an anonymous function is to ensure
+		// that the cancel function is called immediately after the query completes.
+
 		ctx, cancel := context.WithTimeout(c.ctx, c.scrapeTimeout)
 		defer cancel()
 		return c.client.Query(ctx, &query, nil)
