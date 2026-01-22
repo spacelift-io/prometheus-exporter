@@ -8,6 +8,10 @@ on:
   schedule:
     - cron: "19 7 * * 0"
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   build:
     name: Build
