@@ -39,6 +39,8 @@ Use the following command to run the exporter via Docker:
 docker run -it --rm -p 9953:9953 -e "SPACELIFT_PROMEX_API_ENDPOINT=https://<account>.app.spacelift.io" \
   -e "SPACELIFT_PROMEX_API_KEY_ID=<API Key ID>" \
   -e "SPACELIFT_PROMEX_API_KEY_SECRET=<API Key Secret>" \
+  -e "SPACELIFT_PROMEX_CA_CERT_PATH=/certs/ca.crt" \
+  -v /local/path/to/certs:/certs:ro \
   public.ecr.aws/spacelift/promex
 ```
 
@@ -83,6 +85,16 @@ spec:
               value: "" # Add your secret here
             - name: "SPACELIFT_PROMEX_LISTEN_ADDRESS"
               value: ":9953"
+            - name: "SPACELIFT_PROMEX_CA_CERT_PATH"
+              value: "/certs/spacelift-ca.crt" # Optional custom CA cert path
+          volumeMounts:
+            - name: custom-ca-cert
+              mountPath: /certs
+              readOnly: true
+      volumes:
+        - name: custom-ca-cert
+          secret:
+            secretName: spacelift-ca-cert
 ```
 
 To use the example deployment, make sure you fill in the API endpoint, API Key ID and API Key
@@ -96,6 +108,16 @@ By default the exporter listens on port 9953. To change this use the `--listen-a
 
 ```shell
 spacelift-promex serve --listen-address ":9999" --api-endpoint "https://<account>.app.spacelift.io" --api-key-id "<API Key ID>" --api-key-secret "<API Key Secret>"
+```
+
+## Custom CA Certificate
+
+If your Spacelift endpoint uses a certificate chain that is not trusted by system CAs, you can add
+an extra trusted root certificate with `--ca-cert-path` or `SPACELIFT_PROMEX_CA_CERT_PATH`.
+The exporter keeps system CAs and appends the certificate from the path you provide.
+
+```shell
+spacelift-promex serve --ca-cert-path "/certs/spacelift-ca.crt" --api-endpoint "https://<account>.app.spacelift.io" --api-key-id "<API Key ID>" --api-key-secret "<API Key Secret>"
 ```
 
 ## Help
@@ -138,6 +160,7 @@ USAGE:
 
 OPTIONS:
    --api-endpoint value, -e value    Your spacelift API endpoint (e.g. https://myaccount.app.spacelift.io) [$SPACELIFT_PROMEX_API_ENDPOINT]
+   --ca-cert-path value              Path to a PEM-encoded CA certificate to trust in addition to system certificates [$SPACELIFT_PROMEX_CA_CERT_PATH]
    --api-key-id value, -k value      Your spacelift API key ID [$SPACELIFT_PROMEX_API_KEY_ID]
    --api-key-secret value, -s value  Your spacelift API key secret [$SPACELIFT_PROMEX_API_KEY_SECRET]
    --is-development, -d              Uses settings appropriate during local development (default: false) [$SPACELIFT_PROMEX_IS_DEVELOPMENT]
