@@ -2,10 +2,14 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -36,6 +40,14 @@ var (
 		Sources:     cli.EnvVars("SPACELIFT_PROMEX_API_ENDPOINT"),
 		Required:    true,
 		Destination: &apiEndpoint,
+	}
+
+	caCertPath     string
+	flagCACertPath = &cli.StringFlag{
+		Name:        "ca-cert-path",
+		Usage:       "Path to a PEM-encoded CA certificate to trust in addition to system certificates",
+		Sources:     cli.EnvVars("SPACELIFT_PROMEX_CA_CERT_PATH"),
+		Destination: &caCertPath,
 	}
 
 	apiKeyID     string
@@ -84,6 +96,7 @@ var serveCommand *cli.Command = &cli.Command{
 	Flags: []cli.Flag{
 		flagListenAddress,
 		flagAPIEndpoint,
+		flagCACertPath,
 		flagAPIKeyID,
 		flagAPIKeySecret,
 		flagIsDevelopment,
@@ -101,12 +114,17 @@ var serveCommand *cli.Command = &cli.Command{
 			return cli.Exit(fmt.Sprintf("api-endpoint %q does not seem to be a valid URL", apiEndpoint), ExitCodeStartupError)
 		}
 
+		httpClient, err := newHTTPClient(caCertPath)
+		if err != nil {
+			return cli.Exit(fmt.Sprintf("could not configure HTTP client: %v", err), ExitCodeStartupError)
+		}
+
 		logger.Info("Prepping exporter for lift-off")
 
 		session, err := func() (session.Session, error) {
 			sessionCtx, cancel := context.WithTimeout(ctx, time.Second*5)
 			defer cancel()
-			return session.New(sessionCtx, http.DefaultClient, apiEndpoint, apiKeyID, apiKeySecret)
+			return session.New(sessionCtx, httpClient, apiEndpoint, apiKeyID, apiKeySecret)
 		}()
 		if err != nil {
 			logger.Fatalw("failed to create Spacelift API session", zap.Error(err))
@@ -130,7 +148,7 @@ var serveCommand *cli.Command = &cli.Command{
 		// Create a new registry.
 		reg := prometheus.NewRegistry()
 
-		collector, err := newSpaceliftCollector(ctx, http.DefaultClient, session, scrapeTimeout)
+		collector, err := newSpaceliftCollector(ctx, httpClient, session, scrapeTimeout)
 		if err != nil {
 			return cli.Exit(fmt.Sprintf("could not create Spacelift collector: %v", err), ExitCodeStartupError)
 		}
@@ -176,4 +194,34 @@ var serveCommand *cli.Command = &cli.Command{
 
 		return nil
 	},
+}
+
+func newHTTPClient(caCertPath string) (*http.Client, error) {
+	rootCAs, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, fmt.Errorf("could not load system cert pool: %w", err)
+	}
+
+	if rootCAs == nil {
+		rootCAs = x509.NewCertPool()
+	}
+
+	if caCertPath != "" {
+		certPEM, err := os.ReadFile(filepath.Clean(caCertPath))
+		if err != nil {
+			return nil, fmt.Errorf("could not read CA cert file %q: %w", caCertPath, err)
+		}
+
+		if ok := rootCAs.AppendCertsFromPEM(certPEM); !ok {
+			return nil, fmt.Errorf("could not parse CA cert file %q: no certificates found", caCertPath)
+		}
+	}
+
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = &tls.Config{
+		RootCAs:    rootCAs,
+		MinVersion: tls.VersionTLS12,
+	}
+
+	return &http.Client{Transport: transport}, nil
 }
