@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -206,7 +207,7 @@ func newHTTPClient(caCertPath string) (*http.Client, error) {
 	}
 
 	if caCertPath != "" {
-		certPEM, err := os.ReadFile(caCertPath)
+		certPEM, err := os.ReadFile(filepath.Clean(caCertPath))
 		if err != nil {
 			return nil, fmt.Errorf("could not read CA cert file %q: %w", caCertPath, err)
 		}
