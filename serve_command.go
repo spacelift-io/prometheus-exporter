@@ -88,6 +88,15 @@ var (
 		Value:       time.Second * 5,
 		Destination: &scrapeTimeout,
 	}
+
+	metricsRangeWindow     time.Duration
+	flagMetricsRangeWindow = &cli.DurationFlag{
+		Name:        "metrics-range-window",
+		Usage:       "Time window for range/DORA metrics (e.g. 720h for 30 days)",
+		Sources:     cli.EnvVars("SPACELIFT_PROMEX_METRICS_RANGE_WINDOW"),
+		Value:       time.Hour * 24 * 30,
+		Destination: &metricsRangeWindow,
+	}
 )
 
 var serveCommand *cli.Command = &cli.Command{
@@ -101,6 +110,7 @@ var serveCommand *cli.Command = &cli.Command{
 		flagAPIKeySecret,
 		flagIsDevelopment,
 		flagScrapeTimeout,
+		flagMetricsRangeWindow,
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		ctx = logging.Init(ctx, isDevelopment)
@@ -108,6 +118,10 @@ var serveCommand *cli.Command = &cli.Command{
 
 		if scrapeTimeout <= 0 {
 			return cli.Exit("scrape-timeout must be greater than 0", ExitCodeStartupError)
+		}
+
+		if metricsRangeWindow <= 0 {
+			return cli.Exit("metrics-range-window must be greater than 0", ExitCodeStartupError)
 		}
 
 		if url, err := url.Parse(apiEndpoint); err != nil || url.Scheme == "" || url.Host == "" {
@@ -148,7 +162,7 @@ var serveCommand *cli.Command = &cli.Command{
 		// Create a new registry.
 		reg := prometheus.NewRegistry()
 
-		collector, err := newSpaceliftCollector(ctx, httpClient, session, scrapeTimeout)
+		collector, err := newSpaceliftCollector(ctx, httpClient, session, scrapeTimeout, metricsRangeWindow)
 		if err != nil {
 			return cli.Exit(fmt.Sprintf("could not create Spacelift collector: %v", err), ExitCodeStartupError)
 		}
