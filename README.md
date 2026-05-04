@@ -186,8 +186,35 @@ The following metrics are provided by the exporter:
 | `spacelift_current_stacks_count_by_state`                  | `state`                              | The number of stacks grouped by state                                                          |
 | `spacelift_current_resources_count_by_drift`               | `state`                              | The number of resources by drift                                                               |
 | `spacelift_current_avg_stack_size_by_resource_count`       |                                      | The average stack size by resource count                                                       |
+| `spacelift_current_max_stack_size_by_resource_count`       |                                      | The maximum stack size by resource count                                                       |
 | `spacelift_current_average_run_duration`                   |                                      | The average run duration                                                                       |
 | `spacelift_current_median_run_duration`                    |                                      | The median run duration                                                                        |
+| `spacelift_current_drift_detection_coverage`               |                                      | Drift detection coverage across stacks                                                         |
+| `spacelift_current_resources_count_by_vendor`              | `vendor`                             | The number of resources grouped by vendor                                                      |
+| `spacelift_current_has_stacks`                             |                                      | Whether the account has any stacks (1) or not (0)                                              |
+| `spacelift_current_has_runs`                               |                                      | Whether the account has any runs (1) or not (0)                                                |
+| `spacelift_public_worker_pool_users`                       |                                      | The number of stacks/modules using the public worker pool                                      |
+| `spacelift_public_worker_pool_intent_projects`             |                                      | The number of intent projects using the public worker pool                                     |
+| `spacelift_public_worker_pool_runs_schedulable`            |                                      | The number of schedulable runs on the public worker pool for this account                      |
+| `spacelift_worker_pool_runs_schedulable`                   | `worker_pool_id`, `worker_pool_name` | The number of schedulable runs on a worker pool                                                |
+| `spacelift_worker_pool_users`                              | `worker_pool_id`, `worker_pool_name` | The number of stacks/modules using a worker pool                                               |
+| `spacelift_worker_pool_notifications`                      | `worker_pool_id`, `worker_pool_name` | The number of new notifications on a worker pool                                               |
+| `spacelift_worker_pool_intent_projects`                    | `worker_pool_id`, `worker_pool_name` | The number of intent projects using a worker pool                                              |
+| `spacelift_worker_pool_drift_detection_run_limit`          | `worker_pool_id`, `worker_pool_name` | Maximum drift detection runs that can be scheduled on a worker pool (negative = no limit)      |
+| `spacelift_worker_pool_managed_by_k8s_controller`          | `worker_pool_id`, `worker_pool_name` | Whether a worker pool is managed by the Kubernetes WorkerPool controller (1) or not (0)        |
+| `spacelift_current_billing_period_allowed_seconds`         |                                      | The number of seconds that can be used within the current billing period                       |
+| `spacelift_current_billing_period_allowed_seats`           |                                      | The number of seats allowed within the current billing period                                  |
+| `spacelift_current_billing_period_used_seconds`            |                                      | The total amount of worker usage in the current billing period                                 |
+| `spacelift_current_billing_period_used_workers`            |                                      | Maximum number of concurrent self-hosted workers in the current billing period                 |
+| `spacelift_seats_limit`                                    | `type`                               | The total number of seats available (-1 means unlimited)                                       |
+| `spacelift_seats_in_use`                                   | `type`                               | The number of seats currently in use                                                           |
+| `spacelift_integrations_count`                             | `integration`                        | The number of integrations grouped by type                                                     |
+| `spacelift_audit_trail_retention_days`                     |                                      | How many days built-in audit trails are stored                                                 |
+| `spacelift_run_log_retention_days`                         |                                      | How many days run logs are retained                                                            |
+| `spacelift_largest_stack_resources`                        | `stack_slug`, `stack_name`, `stack_state` | Resource count for each of the largest stacks (top-N as returned by the API)              |
+| `spacelift_runs_needing_approval`                          |                                      | The number of runs currently needing approval                                                  |
+| `spacelift_runs_requiring_attention`                       |                                      | The number of runs requiring attention                                                         |
+| `spacelift_drift_detection_schedules_upcoming`             |                                      | The number of upcoming drift detection schedules                                               |
 | `spacelift_scrape_duration`                                |                                      | The duration in seconds of the request to the Spacelift API for metrics                        |
 | `spacelift_build_info`                                     |                                      | Contains build information about the exporter (version, commit, etc)                           |
 

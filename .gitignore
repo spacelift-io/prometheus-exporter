@@ -1,6 +1,8 @@
 .env
 node_modules
-
+.mcp.json
+bakes/*
+fast.yaml
 dist/
 
 # Ignore GPG public keys produced during release process, otherwise goreleaser fails because
