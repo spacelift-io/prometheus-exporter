@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -64,10 +65,19 @@ var (
 	flagAPIKeySecret = &cli.StringFlag{
 		Name:        "api-key-secret",
 		Aliases:     []string{"s"},
-		Usage:       "Your spacelift API key secret",
+		Usage:       "Your spacelift API key secret. Mutually exclusive with --api-key-secret-file.",
 		Sources:     cli.EnvVars("SPACELIFT_PROMEX_API_KEY_SECRET"),
-		Required:    true,
 		Destination: &apiKeySecret,
+	}
+
+	apiKeySecretFile     string
+	flagAPIKeySecretFile = &cli.StringFlag{
+		Name: "api-key-secret-file",
+		Usage: "Path to a file containing the spacelift API key secret. The file is re-read on every " +
+			"token refresh, so this is the right choice for rotating secrets such as Kubernetes " +
+			"projected service-account tokens used with OIDC API keys. Mutually exclusive with --api-key-secret.",
+		Sources:     cli.EnvVars("SPACELIFT_PROMEX_API_KEY_SECRET_FILE"),
+		Destination: &apiKeySecretFile,
 	}
 
 	isDevelopment     bool
@@ -99,6 +109,7 @@ var serveCommand *cli.Command = &cli.Command{
 		flagCACertPath,
 		flagAPIKeyID,
 		flagAPIKeySecret,
+		flagAPIKeySecretFile,
 		flagIsDevelopment,
 		flagScrapeTimeout,
 	},
@@ -114,6 +125,11 @@ var serveCommand *cli.Command = &cli.Command{
 			return cli.Exit(fmt.Sprintf("api-endpoint %q does not seem to be a valid URL", apiEndpoint), ExitCodeStartupError)
 		}
 
+		secretProvider, err := buildSecretProvider(apiKeySecret, apiKeySecretFile)
+		if err != nil {
+			return cli.Exit(err.Error(), ExitCodeStartupError)
+		}
+
 		httpClient, err := newHTTPClient(caCertPath)
 		if err != nil {
 			return cli.Exit(fmt.Sprintf("could not configure HTTP client: %v", err), ExitCodeStartupError)
@@ -124,7 +140,7 @@ var serveCommand *cli.Command = &cli.Command{
 		session, err := func() (session.Session, error) {
 			sessionCtx, cancel := context.WithTimeout(ctx, time.Second*5)
 			defer cancel()
-			return session.New(sessionCtx, httpClient, apiEndpoint, apiKeyID, apiKeySecret)
+			return session.NewWithSecretProvider(sessionCtx, httpClient, apiEndpoint, apiKeyID, secretProvider)
 		}()
 		if err != nil {
 			logger.Fatalw("failed to create Spacelift API session", zap.Error(err))
@@ -224,4 +240,41 @@ func newHTTPClient(caCertPath string) (*http.Client, error) {
 	}
 
 	return &http.Client{Transport: transport}, nil
+}
+
+// buildSecretProvider returns a SecretProvider derived from exactly one of the
+// two CLI inputs. The file-backed provider re-reads its file on every
+// invocation so that rotating tokens (e.g. Kubernetes projected
+// service-account tokens) are picked up automatically.
+func buildSecretProvider(secret, secretFile string) (session.SecretProvider, error) {
+	switch {
+	case secret != "" && secretFile != "":
+		return nil, fmt.Errorf("--api-key-secret and --api-key-secret-file are mutually exclusive")
+	case secret == "" && secretFile == "":
+		return nil, fmt.Errorf("one of --api-key-secret or --api-key-secret-file is required")
+	case secretFile != "":
+		path := filepath.Clean(secretFile)
+		// Read once up front so misconfigurations fail fast at startup
+		// rather than on the first token refresh.
+		if _, err := readSecretFile(path); err != nil {
+			return nil, err
+		}
+		return func() (string, error) { return readSecretFile(path) }, nil
+	default:
+		return session.StaticSecret(secret), nil
+	}
+}
+
+func readSecretFile(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("could not read API key secret from %q: %w", path, err)
+	}
+
+	secret := strings.TrimSpace(string(data))
+	if secret == "" {
+		return "", fmt.Errorf("API key secret file %q is empty", path)
+	}
+
+	return secret, nil
 }

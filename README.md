@@ -21,6 +21,14 @@ the format `https://<account>.app.spacelift.io`, for example `https://my-account
 **NOTE:** the API key you use must be an Admin key because some of the API fields used for the metrics
 require administrative access.
 
+#### OIDC API keys with rotating secrets
+
+If your API key is configured for OIDC (the key ID has the form `oidc::<issuer>::<key-id>`), the
+"secret" is an OIDC JWT issued by your identity provider rather than a static string. Use
+`--api-key-secret-file` (or `SPACELIFT_PROMEX_API_KEY_SECRET_FILE`) to point at the file that holds
+the token. The file is re-read on every token refresh, so projected Kubernetes service-account
+tokens that rotate on disk are picked up automatically without restarting the exporter.
+
 ### Running via the Binary
 
 Download the exporter binary from our
@@ -150,7 +158,8 @@ OPTIONS:
    --api-endpoint value, -e value    Your spacelift API endpoint (e.g. https://myaccount.app.spacelift.io) [$SPACELIFT_PROMEX_API_ENDPOINT]
    --ca-cert-path value              Path to a PEM-encoded CA certificate to trust in addition to system certificates [$SPACELIFT_PROMEX_CA_CERT_PATH]
    --api-key-id value, -k value      Your spacelift API key ID [$SPACELIFT_PROMEX_API_KEY_ID]
-   --api-key-secret value, -s value  Your spacelift API key secret [$SPACELIFT_PROMEX_API_KEY_SECRET]
+   --api-key-secret value, -s value  Your spacelift API key secret. Mutually exclusive with --api-key-secret-file. [$SPACELIFT_PROMEX_API_KEY_SECRET]
+   --api-key-secret-file value       Path to a file containing the spacelift API key secret. The file is re-read on every token refresh, so this is the right choice for rotating secrets such as Kubernetes projected service-account tokens used with OIDC API keys. Mutually exclusive with --api-key-secret. [$SPACELIFT_PROMEX_API_KEY_SECRET_FILE]
    --is-development, -d              Uses settings appropriate during local development (default: false) [$SPACELIFT_PROMEX_IS_DEVELOPMENT]
    --listen-address value, -l value  The address to listen on for HTTP requests (default: ":9953") [$SPACELIFT_PROMEX_LISTEN_ADDRESS]
    --scrape-timeout value, -t value  The maximum duration to wait for a response from the Spacelift API during scraping (default: 5s) [$SPACELIFT_PROMEX_SCRAPE_TIMEOUT]
