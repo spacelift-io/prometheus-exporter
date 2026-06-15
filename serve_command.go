@@ -108,10 +108,17 @@ var serveCommand *cli.Command = &cli.Command{
 		flagAPIEndpoint,
 		flagCACertPath,
 		flagAPIKeyID,
-		flagAPIKeySecret,
-		flagAPIKeySecretFile,
 		flagIsDevelopment,
 		flagScrapeTimeout,
+	},
+	MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{
+		{
+			Required: true,
+			Flags: [][]cli.Flag{
+				{flagAPIKeySecret},
+				{flagAPIKeySecretFile},
+			},
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		ctx = logging.Init(ctx, isDevelopment)
