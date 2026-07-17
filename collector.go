@@ -156,6 +156,7 @@ func (c *spaceliftCollector) Describe(descriptorChannel chan<- *prometheus.Desc)
 	descriptorChannel <- c.publicParallelism
 	descriptorChannel <- c.workerPoolRunsPending
 	descriptorChannel <- c.workerPoolWorkersBusy
+	descriptorChannel <- c.workerPoolWorkers
 	descriptorChannel <- c.workerPoolWorkersDrained
 	descriptorChannel <- c.currentBillingPeriodStart
 	descriptorChannel <- c.currentBillingPeriodEnd
@@ -167,6 +168,7 @@ func (c *spaceliftCollector) Describe(descriptorChannel chan<- *prometheus.Desc)
 	descriptorChannel <- c.currentAvgStackSizeByResourceCount
 	descriptorChannel <- c.currentAverageRunDuration
 	descriptorChannel <- c.currentMedianRunDuration
+	descriptorChannel <- c.scrapeDuration
 	descriptorChannel <- c.buildInfo
 }
 
