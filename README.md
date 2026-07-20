@@ -198,6 +198,8 @@ The following metrics are provided by the exporter:
 | `spacelift_current_average_run_duration`                   |                                      | The average run duration                                                                       |
 | `spacelift_current_median_run_duration`                    |                                      | The median run duration                                                                        |
 | `spacelift_scrape_duration`                                |                                      | The duration in seconds of the request to the Spacelift API for metrics                        |
+| `spacelift_message_queue_messages_visible`                 | `queue_name`, `client_type`          | The number of visible messages ready to be received                                            |
+| `spacelift_message_queue_messages_in_flight`               | `queue_name`, `client_type`          | The number of in-flight messages received but not yet acked or deleted                         |
 | `spacelift_build_info`                                     |                                      | Contains build information about the exporter (version, commit, etc)                           |
 
 ## Example Dashboard

@@ -37,6 +37,8 @@ type spaceliftCollector struct {
 	currentAvgStackSizeByResourceCount     *prometheus.Desc
 	currentAverageRunDuration              *prometheus.Desc
 	currentMedianRunDuration               *prometheus.Desc
+	messageQueueVisible                    *prometheus.Desc
+	messageQueueInFlight                   *prometheus.Desc
 	scrapeDuration                         *prometheus.Desc
 	buildInfo                              *prometheus.Desc
 }
@@ -46,7 +48,6 @@ func newSpaceliftCollector(ctx context.Context, httpClient *http.Client, session
 	if !ok {
 		return nil, errors.New("could not read build info")
 	}
-
 	return &spaceliftCollector{
 		ctx:           ctx,
 		logger:        logging.FromContext(ctx).Sugar(),
@@ -137,6 +138,16 @@ func newSpaceliftCollector(ctx context.Context, httpClient *http.Client, session
 			"The median run duration",
 			nil,
 			nil),
+		messageQueueVisible: prometheus.NewDesc(
+			"spacelift_message_queue_messages_visible",
+			"The number of visible messages ready to be received.",
+			[]string{"queue_name", "client_type"},
+			nil),
+		messageQueueInFlight: prometheus.NewDesc(
+			"spacelift_message_queue_messages_in_flight",
+			"The number of in-flight messages received but not yet acked or deleted.",
+			[]string{"queue_name", "client_type"},
+			nil),
 		scrapeDuration: prometheus.NewDesc(
 			"spacelift_scrape_duration_seconds",
 			"The duration in seconds of the request to the Spacelift API for metrics",
@@ -167,6 +178,8 @@ func (c *spaceliftCollector) Describe(descriptorChannel chan<- *prometheus.Desc)
 	descriptorChannel <- c.currentAvgStackSizeByResourceCount
 	descriptorChannel <- c.currentAverageRunDuration
 	descriptorChannel <- c.currentMedianRunDuration
+	descriptorChannel <- c.messageQueueVisible
+	descriptorChannel <- c.messageQueueInFlight
 	descriptorChannel <- c.buildInfo
 }
 
@@ -205,6 +218,12 @@ type metricsQuery struct {
 		AverageRunDuration          []dataPoint `graphql:"averageRunDuration"`
 		MedianRunDuration           []dataPoint `graphql:"medianRunDuration"`
 	} `graphql:"metrics"`
+	MessageQueueStats []struct {
+		QueueName  string `graphql:"queueName"`
+		ClientType string `graphql:"clientType"`
+		Visible    int    `graphql:"visible"`
+		InFlight   int    `graphql:"inFlight"`
+	} `graphql:"messageQueueStats"`
 }
 
 func (c *spaceliftCollector) Collect(metricChannel chan<- prometheus.Metric) {
@@ -287,5 +306,10 @@ func (c *spaceliftCollector) Collect(metricChannel chan<- prometheus.Metric) {
 			}
 		}
 		metricChannel <- prometheus.MustNewConstMetric(c.workerPoolWorkersDrained, prometheus.GaugeValue, float64(drained), workerPool.ID, workerPool.Name)
+	}
+
+	for _, queue := range query.MessageQueueStats {
+		metricChannel <- prometheus.MustNewConstMetric(c.messageQueueVisible, prometheus.GaugeValue, float64(queue.Visible), queue.QueueName, queue.ClientType)
+		metricChannel <- prometheus.MustNewConstMetric(c.messageQueueInFlight, prometheus.GaugeValue, float64(queue.InFlight), queue.QueueName, queue.ClientType)
 	}
 }
