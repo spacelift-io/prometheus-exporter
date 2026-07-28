@@ -12,6 +12,11 @@ import (
 	"github.com/spacelift-io/prometheus-exporter/logging"
 )
 
+// operationName is sent with every GraphQL request so that Spacelift can
+// attribute API load to the exporter. It must be applied to retries too,
+// otherwise the reissued request arrives anonymous and unattributable.
+const operationName = "PrometheusExporter"
+
 type client struct {
 	wraps   *http.Client
 	session session.Session
@@ -29,7 +34,7 @@ func (c *client) Query(ctx context.Context, query interface{}, variables map[str
 		return err
 	}
 
-	err = apiClient.Query(ctx, query, variables, graphql.OperationName("PrometheusExporter"))
+	err = apiClient.Query(ctx, query, variables, graphql.OperationName(operationName))
 	if err != nil && strings.Contains(err.Error(), "unauthorized") {
 		logger.Warn("Server returned an unauthorized response - retrying request with a new token")
 		c.session.RefreshToken(ctx)
@@ -40,7 +45,7 @@ func (c *client) Query(ctx context.Context, query interface{}, variables map[str
 			return err
 		}
 
-		err = apiClient.Query(ctx, query, variables)
+		err = apiClient.Query(ctx, query, variables, graphql.OperationName(operationName))
 	}
 
 	return err
