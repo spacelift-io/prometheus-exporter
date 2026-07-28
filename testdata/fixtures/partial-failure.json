@@ -1,0 +1,24 @@
+{
+  "data": {
+    "publicWorkerPool": {
+      "parallelism": 10,
+      "busyWorkers": 3,
+      "pendingRuns": 2
+    },
+    "workerPools": [],
+    "usage": {
+      "billingPeriodStart": 1752000000,
+      "billingPeriodEnd": 1754678400,
+      "usedPrivateMinutes": 12345,
+      "usedPublicMinutes": 678,
+      "usedSeats": 42
+    },
+    "metrics": null
+  },
+  "errors": [
+    {
+      "message": "internal error",
+      "path": ["metrics", "stacksCountByState"]
+    }
+  ]
+}

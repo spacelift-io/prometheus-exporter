@@ -1,0 +1,29 @@
+name: 🧪 Test
+
+on:
+  push: { branches: [main] }
+  pull_request: { branches: [main] }
+
+jobs:
+  testing:
+    name: Run the unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with: { go-version-file: go.mod }
+
+      - name: Run the tests
+        run: go test -race ./...
+
+      - name: Check that the golden files are up to date
+        run: |
+          go test . -update-golden
+          if ! git diff --exit-code -- testdata/golden; then
+            echo "::error::testdata/golden is stale. Run 'go test . -update-golden' and commit the result."
+            exit 1
+          fi

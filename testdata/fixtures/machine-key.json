@@ -1,0 +1,9 @@
+{
+  "data": null,
+  "errors": [
+    {
+      "message": "not available for machine sessions",
+      "path": ["usage"]
+    }
+  ]
+}

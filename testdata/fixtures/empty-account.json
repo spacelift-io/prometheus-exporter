@@ -1,0 +1,24 @@
+{
+  "data": {
+    "publicWorkerPool": {
+      "parallelism": 2,
+      "busyWorkers": 0,
+      "pendingRuns": 0
+    },
+    "workerPools": [],
+    "usage": {
+      "billingPeriodStart": 1752000000,
+      "billingPeriodEnd": 1754678400,
+      "usedPrivateMinutes": 0,
+      "usedPublicMinutes": 0,
+      "usedSeats": 1
+    },
+    "metrics": {
+      "stacksCountByState": [],
+      "resourcesCountByDrift": [],
+      "avgStackSizeByResourceCount": [],
+      "averageRunDuration": [],
+      "medianRunDuration": []
+    }
+  }
+}

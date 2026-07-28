@@ -1,0 +1,35 @@
+{
+  "data": {
+    "publicWorkerPool": {
+      "parallelism": 0,
+      "busyWorkers": 0,
+      "pendingRuns": 0
+    },
+    "workerPools": [
+      {
+        "id": "01HQZXB1B2C3D4E5F6G7H8J9K0",
+        "name": "on-prem",
+        "pendingRuns": 1,
+        "busyWorkers": 2,
+        "workers": [
+          { "id": "worker-1", "drained": false },
+          { "id": "worker-2", "drained": false }
+        ]
+      }
+    ],
+    "usage": {
+      "billingPeriodStart": 1752000000,
+      "billingPeriodEnd": 1754678400,
+      "usedPrivateMinutes": 5000,
+      "usedPublicMinutes": 0,
+      "usedSeats": 9
+    },
+    "metrics": {
+      "stacksCountByState": [{ "value": 12, "labels": ["FINISHED"] }],
+      "resourcesCountByDrift": [{ "value": 340, "labels": ["IN_SYNC"] }],
+      "avgStackSizeByResourceCount": [{ "value": 28, "labels": [] }],
+      "averageRunDuration": [{ "value": 95000000000, "labels": [] }],
+      "medianRunDuration": [{ "value": 88000000000, "labels": [] }]
+    }
+  }
+}

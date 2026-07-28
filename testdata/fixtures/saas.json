@@ -1,0 +1,57 @@
+{
+  "data": {
+    "publicWorkerPool": {
+      "parallelism": 10,
+      "busyWorkers": 3,
+      "pendingRuns": 2
+    },
+    "workerPools": [
+      {
+        "id": "01HQZX9K7P2M3N4Q5R6S7T8U9V",
+        "name": "production",
+        "pendingRuns": 5,
+        "busyWorkers": 4,
+        "workers": [
+          { "id": "worker-a", "drained": false },
+          { "id": "worker-b", "drained": false },
+          { "id": "worker-c", "drained": false },
+          { "id": "worker-d", "drained": false },
+          { "id": "worker-e", "drained": true },
+          { "id": "worker-f", "drained": true }
+        ]
+      },
+      {
+        "id": "01HQZXA1B2C3D4E5F6G7H8J9K0",
+        "name": "staging",
+        "pendingRuns": 0,
+        "busyWorkers": 1,
+        "workers": [
+          { "id": "worker-g", "drained": false },
+          { "id": "worker-h", "drained": false },
+          { "id": "worker-i", "drained": false }
+        ]
+      }
+    ],
+    "usage": {
+      "billingPeriodStart": 1752000000,
+      "billingPeriodEnd": 1754678400,
+      "usedPrivateMinutes": 12345,
+      "usedPublicMinutes": 678,
+      "usedSeats": 42
+    },
+    "metrics": {
+      "stacksCountByState": [
+        { "value": 128, "labels": ["FINISHED"] },
+        { "value": 7, "labels": ["FAILED"] },
+        { "value": 3, "labels": ["UNCONFIRMED"] }
+      ],
+      "resourcesCountByDrift": [
+        { "value": 1902, "labels": ["IN_SYNC"] },
+        { "value": 14, "labels": ["DRIFTED"] }
+      ],
+      "avgStackSizeByResourceCount": [{ "value": 23, "labels": [] }],
+      "averageRunDuration": [{ "value": 187000000000, "labels": [] }],
+      "medianRunDuration": [{ "value": 142000000000, "labels": [] }]
+    }
+  }
+}
