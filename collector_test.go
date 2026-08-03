@@ -144,11 +144,18 @@ func TestQueryShape(t *testing.T) {
 	}
 
 	query := stub.lastQuery(t)
+	const expectedQuery = `query PrometheusExporter{publicWorkerPool{parallelism,busyWorkers,pendingRuns},workerPools{id,name,pendingRuns,busyWorkers,workers{id,drained}},usage{billingPeriodStart,billingPeriodEnd,usedPrivateMinutes,usedPublicMinutes,usedSeats},metrics{stacksCountByState{value,labels},resourcesCountByDrift{value,labels},avgStackSizeByResourceCount{value,labels},averageRunDuration{value,labels},medianRunDuration{value,labels}}}`
+	if query != expectedQuery {
+		t.Errorf("GraphQL query changed without updating the API-cost contract\nwant: %s\n got: %s", expectedQuery, query)
+	}
 
 	// The operation name lets Spacelift attribute backend cost to the
 	// exporter in their own APM.
 	if !strings.HasPrefix(query, "query PrometheusExporter{") {
 		t.Errorf("query is not named PrometheusExporter: %s", query)
+	}
+	if len(stub.operationNames) != 1 || stub.operationNames[0] != "PrometheusExporter" {
+		t.Errorf("operationName envelope field = %v, want [PrometheusExporter]", stub.operationNames)
 	}
 
 	// Range fields return a bucket per day over a server-chosen window.
@@ -235,6 +242,16 @@ func TestSessionRefreshedOnUnauthorized(t *testing.T) {
 	if len(stub.queries) != 2 {
 		t.Errorf("got %d GraphQL requests, want 2 (original plus one retry)", len(stub.queries))
 	}
+
+	wantAuthorization := []string{"Bearer initial-token", "Bearer refreshed-token"}
+	if len(stub.authorizationHeaders) != len(wantAuthorization) {
+		t.Fatalf("got Authorization headers %v, want %v", stub.authorizationHeaders, wantAuthorization)
+	}
+	for i, want := range wantAuthorization {
+		if got := stub.authorizationHeaders[i]; got != want {
+			t.Errorf("request %d Authorization header = %q, want %q", i+1, got, want)
+		}
+	}
 }
 
 // TestRetryPreservesOperationName guards a real bug: the retry in
@@ -253,8 +270,11 @@ func TestRetryPreservesOperationName(t *testing.T) {
 	}
 
 	for i, query := range stub.queries {
-		if !strings.Contains(query, "PrometheusExporter") {
-			t.Errorf("request %d lost the operation name and is anonymous: %s", i+1, query)
+		if !strings.HasPrefix(query, "query PrometheusExporter{") {
+			t.Errorf("request %d query document lost the operation name: %s", i+1, query)
+		}
+		if got := stub.operationNames[i]; got != "PrometheusExporter" {
+			t.Errorf("request %d operationName envelope field = %q, want PrometheusExporter", i+1, got)
 		}
 	}
 }

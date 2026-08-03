@@ -29,12 +29,26 @@ var updateGolden = flag.Bool("update-golden", false, "rewrite testdata/golden/*.
 // GraphQL encoding without standing in an API-key exchange.
 type fakeSession struct {
 	endpoint     string
+	token        string
 	refreshCalls int
 }
 
-func (s *fakeSession) BearerToken(context.Context) (string, error) { return "test-token", nil }
-func (s *fakeSession) Endpoint() string                            { return s.endpoint }
-func (s *fakeSession) RefreshToken(context.Context) error          { s.refreshCalls++; return nil }
+func (s *fakeSession) BearerToken(context.Context) (string, error) {
+	if s.token == "" {
+		return "initial-token", nil
+	}
+
+	return s.token, nil
+}
+
+func (s *fakeSession) Endpoint() string { return s.endpoint }
+
+func (s *fakeSession) RefreshToken(context.Context) error {
+	s.refreshCalls++
+	s.token = "refreshed-token"
+
+	return nil
+}
 
 // graphqlStub is a stand-in for the Spacelift GraphQL API. It records every
 // query body it receives and replies with a canned response, so tests can
@@ -47,6 +61,11 @@ type graphqlStub struct {
 
 	// queries holds the raw "query" string of every request received.
 	queries []string
+
+	// operationNames and authorizationHeaders retain the envelope and request
+	// metadata that are not present in the rendered query string.
+	operationNames       []string
+	authorizationHeaders []string
 }
 
 func newGraphQLStub(t *testing.T, response string) *graphqlStub {
@@ -70,6 +89,8 @@ func newGraphQLStub(t *testing.T, response string) *graphqlStub {
 			return
 		}
 		stub.queries = append(stub.queries, envelope.Query)
+		stub.operationNames = append(stub.operationNames, envelope.OperationName)
+		stub.authorizationHeaders = append(stub.authorizationHeaders, r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, stub.response)

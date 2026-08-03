@@ -4,6 +4,9 @@ on:
   push: { branches: [main] }
   pull_request: { branches: [main] }
 
+permissions:
+  contents: read
+
 jobs:
   testing:
     name: Run the unit tests
@@ -12,6 +15,8 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@v7
