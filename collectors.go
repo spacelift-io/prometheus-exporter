@@ -13,15 +13,38 @@ import (
 	"github.com/spacelift-io/prometheus-exporter/logging"
 )
 
-// newCollectors returns every collector, in the order their documents are
-// requested on each scrape.
-func newCollectors() []collector.Collector {
-	return []collector.Collector{
-		collector.NewPublicWorkerPool(),
-		collector.NewWorkerPools(),
-		collector.NewUsage(),
-		collector.NewAggregates(),
+type collectorSpec struct {
+	name           string
+	defaultEnabled bool
+	build          func() collector.Collector
+}
+
+// collectorSpecs lists every collector in the order their documents are
+// requested on each scrape, which is also the order of their flags in --help.
+// A collector whose data exists only on some deployments or tiers should be
+// off by default, so that the others do not report it as unsupported forever.
+var collectorSpecs = []collectorSpec{
+	{name: "publicworkerpool", defaultEnabled: true, build: collector.NewPublicWorkerPool},
+	{name: "workerpools", defaultEnabled: true, build: collector.NewWorkerPools},
+	{name: "usage", defaultEnabled: true, build: collector.NewUsage},
+	{name: "aggregates", defaultEnabled: true, build: collector.NewAggregates},
+}
+
+// newCollectors builds the enabled collectors. A collector absent from enabled
+// takes its default; a nil map yields the default set.
+func newCollectors(enabled map[string]bool) []collector.Collector {
+	out := make([]collector.Collector, 0, len(collectorSpecs))
+	for _, spec := range collectorSpecs {
+		on, set := enabled[spec.name]
+		if !set {
+			on = spec.defaultEnabled
+		}
+		if on {
+			out = append(out, spec.build())
+		}
 	}
+
+	return out
 }
 
 // newExporter assembles the exporter over the given collectors. It performs no
