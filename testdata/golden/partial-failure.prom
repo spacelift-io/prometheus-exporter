@@ -1,12 +1,6 @@
 # HELP spacelift_build_info Contains build information about the exporter
 # TYPE spacelift_build_info gauge
 spacelift_build_info{commit="devel",goversion="<goversion>",version="local"} 1
-# HELP spacelift_current_average_run_duration The average run duration
-# TYPE spacelift_current_average_run_duration gauge
-spacelift_current_average_run_duration 9.5e+10
-# HELP spacelift_current_avg_stack_size_by_resource_count The average stack size by resource count
-# TYPE spacelift_current_avg_stack_size_by_resource_count gauge
-spacelift_current_avg_stack_size_by_resource_count 28
 # HELP spacelift_current_billing_period_end_timestamp_seconds The timestamp of the end of the current billing period
 # TYPE spacelift_current_billing_period_end_timestamp_seconds gauge
 spacelift_current_billing_period_end_timestamp_seconds 1.7546784e+09
@@ -15,31 +9,22 @@ spacelift_current_billing_period_end_timestamp_seconds 1.7546784e+09
 spacelift_current_billing_period_start_timestamp_seconds 1.752e+09
 # HELP spacelift_current_billing_period_used_private_seconds The amount of private worker usage in the current billing period
 # TYPE spacelift_current_billing_period_used_private_seconds gauge
-spacelift_current_billing_period_used_private_seconds 300000
+spacelift_current_billing_period_used_private_seconds 740700
 # HELP spacelift_current_billing_period_used_public_seconds The amount of public worker usage in the current billing period
 # TYPE spacelift_current_billing_period_used_public_seconds gauge
-spacelift_current_billing_period_used_public_seconds 0
+spacelift_current_billing_period_used_public_seconds 40680
 # HELP spacelift_current_billing_period_used_seats The number of seats used in the current billing period
 # TYPE spacelift_current_billing_period_used_seats gauge
-spacelift_current_billing_period_used_seats 9
-# HELP spacelift_current_median_run_duration The median run duration
-# TYPE spacelift_current_median_run_duration gauge
-spacelift_current_median_run_duration 8.8e+10
-# HELP spacelift_current_resources_count_by_drift The number of drifted resources
-# TYPE spacelift_current_resources_count_by_drift gauge
-spacelift_current_resources_count_by_drift{state="IN_SYNC"} 340
-# HELP spacelift_current_stacks_count_by_state The number of stacks grouped by state
-# TYPE spacelift_current_stacks_count_by_state gauge
-spacelift_current_stacks_count_by_state{state="FINISHED"} 12
+spacelift_current_billing_period_used_seats 42
 # HELP spacelift_public_worker_pool_parallelism The maximum number of simultaneously executing runs on the public worker pool for this account
 # TYPE spacelift_public_worker_pool_parallelism gauge
-spacelift_public_worker_pool_parallelism 0
+spacelift_public_worker_pool_parallelism 10
 # HELP spacelift_public_worker_pool_runs_pending The number of runs in your account currently queued and waiting for a public worker
 # TYPE spacelift_public_worker_pool_runs_pending gauge
-spacelift_public_worker_pool_runs_pending 0
+spacelift_public_worker_pool_runs_pending 2
 # HELP spacelift_public_worker_pool_workers_busy The number of currently busy workers in the public worker pool for this account
 # TYPE spacelift_public_worker_pool_workers_busy gauge
-spacelift_public_worker_pool_workers_busy 0
+spacelift_public_worker_pool_workers_busy 3
 # HELP spacelift_scrape_collector_duration_seconds Duration of a collector's Spacelift API request on the last scrape.
 # TYPE spacelift_scrape_collector_duration_seconds gauge
 spacelift_scrape_collector_duration_seconds{collector="aggregates"} <duration>
@@ -48,7 +33,7 @@ spacelift_scrape_collector_duration_seconds{collector="usage"} <duration>
 spacelift_scrape_collector_duration_seconds{collector="workerpools"} <duration>
 # HELP spacelift_scrape_collector_success Whether a collector succeeded on the last scrape (1) or failed (0).
 # TYPE spacelift_scrape_collector_success gauge
-spacelift_scrape_collector_success{collector="aggregates"} 1
+spacelift_scrape_collector_success{collector="aggregates"} 0
 spacelift_scrape_collector_success{collector="publicworkerpool"} 1
 spacelift_scrape_collector_success{collector="usage"} 1
 spacelift_scrape_collector_success{collector="workerpools"} 1
@@ -63,13 +48,17 @@ spacelift_scrape_collector_supported{collector="workerpools"} 1
 spacelift_scrape_duration_seconds <duration>
 # HELP spacelift_worker_pool_runs_pending The number of runs currently queued and waiting for a worker from a particular pool
 # TYPE spacelift_worker_pool_runs_pending gauge
-spacelift_worker_pool_runs_pending{worker_pool_id="01HQZXB1B2C3D4E5F6G7H8J9K0",worker_pool_name="on-prem"} 1
+spacelift_worker_pool_runs_pending{worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 5
+spacelift_worker_pool_runs_pending{worker_pool_id="01HQZXA1B2C3D4E5F6G7H8J9K0",worker_pool_name="staging"} 0
 # HELP spacelift_worker_pool_workers The number of workers in a worker pool
 # TYPE spacelift_worker_pool_workers gauge
-spacelift_worker_pool_workers{worker_pool_id="01HQZXB1B2C3D4E5F6G7H8J9K0",worker_pool_name="on-prem"} 2
+spacelift_worker_pool_workers{worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 6
+spacelift_worker_pool_workers{worker_pool_id="01HQZXA1B2C3D4E5F6G7H8J9K0",worker_pool_name="staging"} 3
 # HELP spacelift_worker_pool_workers_busy The number of currently busy workers in a worker pool
 # TYPE spacelift_worker_pool_workers_busy gauge
-spacelift_worker_pool_workers_busy{worker_pool_id="01HQZXB1B2C3D4E5F6G7H8J9K0",worker_pool_name="on-prem"} 2
+spacelift_worker_pool_workers_busy{worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 4
+spacelift_worker_pool_workers_busy{worker_pool_id="01HQZXA1B2C3D4E5F6G7H8J9K0",worker_pool_name="staging"} 1
 # HELP spacelift_worker_pool_workers_drained The number of workers in a worker pool that have been drained
 # TYPE spacelift_worker_pool_workers_drained gauge
-spacelift_worker_pool_workers_drained{worker_pool_id="01HQZXB1B2C3D4E5F6G7H8J9K0",worker_pool_name="on-prem"} 0
+spacelift_worker_pool_workers_drained{worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 2
+spacelift_worker_pool_workers_drained{worker_pool_id="01HQZXA1B2C3D4E5F6G7H8J9K0",worker_pool_name="staging"} 0

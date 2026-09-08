@@ -43,6 +43,24 @@ spacelift_public_worker_pool_runs_pending 2
 # HELP spacelift_public_worker_pool_workers_busy The number of currently busy workers in the public worker pool for this account
 # TYPE spacelift_public_worker_pool_workers_busy gauge
 spacelift_public_worker_pool_workers_busy 3
+# HELP spacelift_scrape_collector_duration_seconds Duration of a collector's Spacelift API request on the last scrape.
+# TYPE spacelift_scrape_collector_duration_seconds gauge
+spacelift_scrape_collector_duration_seconds{collector="aggregates"} <duration>
+spacelift_scrape_collector_duration_seconds{collector="publicworkerpool"} <duration>
+spacelift_scrape_collector_duration_seconds{collector="usage"} <duration>
+spacelift_scrape_collector_duration_seconds{collector="workerpools"} <duration>
+# HELP spacelift_scrape_collector_success Whether a collector succeeded on the last scrape (1) or failed (0).
+# TYPE spacelift_scrape_collector_success gauge
+spacelift_scrape_collector_success{collector="aggregates"} 1
+spacelift_scrape_collector_success{collector="publicworkerpool"} 1
+spacelift_scrape_collector_success{collector="usage"} 1
+spacelift_scrape_collector_success{collector="workerpools"} 1
+# HELP spacelift_scrape_collector_supported Whether a collector's data is available on this deployment, tier and API key (1) or not (0). An unsupported collector is not a failure.
+# TYPE spacelift_scrape_collector_supported gauge
+spacelift_scrape_collector_supported{collector="aggregates"} 1
+spacelift_scrape_collector_supported{collector="publicworkerpool"} 1
+spacelift_scrape_collector_supported{collector="usage"} 1
+spacelift_scrape_collector_supported{collector="workerpools"} 1
 # HELP spacelift_scrape_duration_seconds The duration in seconds of the request to the Spacelift API for metrics
 # TYPE spacelift_scrape_duration_seconds gauge
 spacelift_scrape_duration_seconds <duration>

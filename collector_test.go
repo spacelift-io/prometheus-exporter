@@ -1,6 +1,10 @@
 package main
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 
@@ -21,6 +25,20 @@ func TestCollectGolden(t *testing.T) {
 			assertGolden(t, shape, gather(t, stub.collector(t)))
 		})
 	}
+}
+
+// TestCollectGoldenPartialFailure pins the exposition output of a partial-mode
+// scrape in which one collector fails. This is the only golden that captures a
+// failure shape: success=0 for the broken collector, the healthy collectors'
+// metrics still present, and the failed collector's own families absent rather
+// than zeroed. Strict mode has no golden because a failing strict scrape
+// discards the gather entirely; its contract is pinned by
+// TestStrictModeGatherErrorNamesTheFailure in the collector package.
+func TestCollectGoldenPartialFailure(t *testing.T) {
+	stub := newGraphQLStub(t, fixture(t, "saas"))
+	stub.failOperation("PrometheusExporterAggregates", `{"errors":[{"message":"internal error"}]}`)
+
+	assertGolden(t, "partial-failure", gather(t, stub.partialCollector(t)))
 }
 
 // TestDescribeMatchesCollect asserts that every descriptor announced by
@@ -82,33 +100,13 @@ var lintBaseline = map[string]string{
 
 // TestCollectLint enforces the Prometheus naming and unit conventions on
 // everything except the grandfathered baseline: base units, _total only on
-// counters, no reserved suffixes, consistent HELP.
+// counters, no reserved suffixes, consistent HELP. It also fails when a
+// baseline entry stops being reported, so the grandfather list can only
+// shrink and never silently rots.
 //
-// This is the gate that stops a large metrics PR from shipping convention bugs
-// that a human reviewer would have to catch by eye.
+// One shape suffices: saas emits every family the exporter has, so linting the
+// other fixtures adds runtime without adding surface.
 func TestCollectLint(t *testing.T) {
-	for _, shape := range []string{"saas", "self-hosted", "empty-account"} {
-		t.Run(shape, func(t *testing.T) {
-			stub := newGraphQLStub(t, fixture(t, shape))
-
-			problems, err := testutil.CollectAndLint(stub.collector(t))
-			if err != nil {
-				t.Fatalf("linting collector output: %v", err)
-			}
-
-			for _, problem := range problems {
-				if lintBaseline[problem.Metric] == problem.Text {
-					continue
-				}
-				t.Errorf("promlint: %s: %s", problem.Metric, problem.Text)
-			}
-		})
-	}
-}
-
-// TestLintBaselineIsNotStale fails if a grandfathered finding has been fixed,
-// so the baseline shrinks as names are corrected and never silently rots.
-func TestLintBaselineIsNotStale(t *testing.T) {
 	stub := newGraphQLStub(t, fixture(t, "saas"))
 
 	problems, err := testutil.CollectAndLint(stub.collector(t))
@@ -119,6 +117,9 @@ func TestLintBaselineIsNotStale(t *testing.T) {
 	found := map[string]string{}
 	for _, problem := range problems {
 		found[problem.Metric] = problem.Text
+		if lintBaseline[problem.Metric] != problem.Text {
+			t.Errorf("promlint: %s: %s", problem.Metric, problem.Text)
+		}
 	}
 
 	for metric, text := range lintBaseline {
@@ -138,151 +139,269 @@ func TestQueryShape(t *testing.T) {
 	metrics := make(chan prometheus.Metric, 256)
 	stub.collector(t).Collect(metrics)
 	close(metrics)
+	queries := stub.recordedQueries()
+	defaultCollectors := newCollectors(nil)
 
-	if got := len(stub.queries); got != 1 {
-		t.Errorf("a scrape issued %d GraphQL requests, want exactly 1", got)
+	// One request per enabled collector, and no more. Isolation costs
+	// requests, so the count is part of the contract with Spacelift's
+	// backend and a reviewer should see it change in a diff.
+	if got, want := len(queries), len(defaultCollectors); got != want {
+		t.Errorf("a scrape issued %d GraphQL requests, want %d (one per enabled collector)", got, want)
 	}
 
-	query := stub.lastQuery(t)
-	const expectedQuery = `query PrometheusExporter{publicWorkerPool{parallelism,busyWorkers,pendingRuns},workerPools{id,name,pendingRuns,busyWorkers,workers{id,drained}},usage{billingPeriodStart,billingPeriodEnd,usedPrivateMinutes,usedPublicMinutes,usedSeats},metrics{stacksCountByState{value,labels},resourcesCountByDrift{value,labels},avgStackSizeByResourceCount{value,labels},averageRunDuration{value,labels},medianRunDuration{value,labels}}}`
-	if query != expectedQuery {
-		t.Errorf("GraphQL query changed without updating the API-cost contract\nwant: %s\n got: %s", expectedQuery, query)
+	// Every request carries a collector-specific operation name, so API load
+	// can be attributed to a subsystem rather than to "the exporter", and each
+	// document is pinned exactly: a change to any field selection is a change
+	// to the API-cost contract and must show up in this diff.
+	expectedQueries := map[string]string{
+		"PrometheusExporterPublicWorkerPool": `query PrometheusExporterPublicWorkerPool{publicWorkerPool{parallelism,busyWorkers,pendingRuns}}`,
+		"PrometheusExporterWorkerPools":      `query PrometheusExporterWorkerPools{workerPools{id,name,pendingRuns,busyWorkers,workers{id,drained}}}`,
+		"PrometheusExporterUsage":            `query PrometheusExporterUsage{usage{billingPeriodStart,billingPeriodEnd,usedPrivateMinutes,usedPublicMinutes,usedSeats}}`,
+		"PrometheusExporterAggregates":       `query PrometheusExporterAggregates{metrics{stacksCountByState{value,labels},resourcesCountByDrift{value,labels},avgStackSizeByResourceCount{value,labels},averageRunDuration{value,labels},medianRunDuration{value,labels}}}`,
 	}
 
-	// The operation name lets Spacelift attribute backend cost to the
-	// exporter in their own APM.
-	if !strings.HasPrefix(query, "query PrometheusExporter{") {
-		t.Errorf("query is not named PrometheusExporter: %s", query)
+	seen := map[string]string{}
+	for _, query := range queries {
+		seen[operationOf(query)] = query
 	}
-	if len(stub.operationNames) != 1 || stub.operationNames[0] != "PrometheusExporter" {
-		t.Errorf("operationName envelope field = %v, want [PrometheusExporter]", stub.operationNames)
+
+	for operation, want := range expectedQueries {
+		got, ok := seen[operation]
+		if !ok {
+			t.Errorf("no request was named %s; got %v", operation, operationNames(queries))
+			continue
+		}
+		if got != want {
+			t.Errorf("%s changed without updating the API-cost contract\nwant: %s\n got: %s", operation, want, got)
+		}
+	}
+
+	// The envelope operationName must match the document, exactly one per
+	// collector, or Spacelift's APM attribution sees anonymous or misattributed
+	// queries. Compared as a sorted multiset so a duplicate of one valid name
+	// cannot mask another going missing.
+	envelopeNames := stub.recordedOperationNames()
+	sort.Strings(envelopeNames)
+
+	wantNames := make([]string, 0, len(expectedQueries))
+	for name := range expectedQueries {
+		wantNames = append(wantNames, name)
+	}
+	sort.Strings(wantNames)
+
+	if !slices.Equal(envelopeNames, wantNames) {
+		t.Errorf("operationName envelope fields = %v, want exactly %v", envelopeNames, wantNames)
 	}
 
 	// Range fields return a bucket per day over a server-chosen window.
 	// Prometheus should be given point-in-time values and left to do its
 	// own windowing, so none of these belong in a scrape.
-	for _, forbidden := range []string{"metricsRange", "Range{", "Range(", "averageRunDurationRange", "stackFailuresRange"} {
-		if strings.Contains(query, forbidden) {
-			t.Errorf("query selects the windowed field %q; Prometheus must do its own windowing", forbidden)
+	for _, query := range queries {
+		for _, forbidden := range []string{"metricsRange", "Range{", "Range(", "averageRunDurationRange", "stackFailuresRange"} {
+			if strings.Contains(query, forbidden) {
+				t.Errorf("query selects the windowed field %q; Prometheus must do its own windowing", forbidden)
+			}
 		}
 	}
 }
 
-func TestCollectorSurfacesQueryErrors(t *testing.T) {
-	for _, shape := range []string{"machine-key", "partial-failure"} {
-		t.Run(shape, func(t *testing.T) {
-			stub := newGraphQLStub(t, fixture(t, shape))
+// TestCollectorsAreIsolated is the point of the refactor: one failing domain
+// must not suppress the others.
+//
+// The stub fails the aggregates request while every other collector receives a
+// healthy response. A scrape should still produce the working collectors'
+// metrics and report precisely which collector did not work.
+func TestCollectorsAreIsolated(t *testing.T) {
+	stub := newGraphQLStub(t, fixture(t, "saas"))
+	stub.failOperation("PrometheusExporterAggregates", fixture(t, "partial-failure"))
 
-			metrics := make(chan prometheus.Metric, 256)
-			stub.collector(t).Collect(metrics)
-			close(metrics)
+	output := gather(t, stub.partialCollector(t))
 
-			var names []string
-			for metric := range metrics {
-				names = append(names, fqName(t, metric.Desc().String()))
+	// The failing collector is reported, and only it.
+	for _, want := range []string{
+		`spacelift_scrape_collector_success{collector="aggregates"} 0`,
+		`spacelift_scrape_collector_success{collector="workerpools"} 1`,
+		`spacelift_scrape_collector_success{collector="usage"} 1`,
+		`spacelift_scrape_collector_success{collector="publicworkerpool"} 1`,
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("missing %q in:\n%s", want, output)
+		}
+	}
+
+	// The healthy collectors still produced their metrics.
+	for _, want := range []string{
+		"spacelift_worker_pool_runs_pending{",
+		"spacelift_current_billing_period_used_seats ",
+		"spacelift_public_worker_pool_parallelism ",
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("a failure in one collector suppressed %q:\n%s", want, output)
+		}
+	}
+
+	// The failing collector's metrics are absent rather than zeroed, so a
+	// stale value is never mistaken for a live one.
+	if strings.Contains(output, "spacelift_current_stacks_count_by_state{") {
+		t.Error("the failed collector emitted metrics anyway")
+	}
+}
+
+func TestMetricsHandlerPartialScrapePolicy(t *testing.T) {
+	for _, test := range []struct {
+		name            string
+		partialScrapes  bool
+		failAll         bool
+		wantStatus      int
+		wantPartialBody bool
+	}{
+		{
+			name:       "legacy behavior is the default",
+			wantStatus: http.StatusInternalServerError,
+		},
+		{
+			name:            "partial scrapes are opt in",
+			partialScrapes:  true,
+			wantStatus:      http.StatusOK,
+			wantPartialBody: true,
+		},
+		{
+			name:           "complete failure stays visible in partial mode",
+			partialScrapes: true,
+			failAll:        true,
+			wantStatus:     http.StatusInternalServerError,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			stub := newGraphQLStub(t, fixture(t, "saas"))
+			if test.failAll {
+				stub.response = `{"errors":[{"message":"internal error"}]}`
+			} else {
+				stub.failOperation(
+					"PrometheusExporterAggregates",
+					`{"errors":[{"message":"internal error"}]}`,
+				)
 			}
 
-			// Current behaviour: a single failing field costs the whole
-			// scrape. Everything except the scrape duration and the error
-			// marker is dropped, even when the response carried usable
-			// data alongside the error.
-			//
-			// This assertion is intentionally strict so that changing it
-			// is a deliberate, visible act.
-			want := map[string]bool{
-				"spacelift_scrape_duration_seconds": true,
-				"spacelift_error":                   true,
+			registry := prometheus.NewPedanticRegistry()
+			collector := stub.collectorWithPartialScrapes(t, test.partialScrapes)
+			if err := registry.Register(collector); err != nil {
+				t.Fatalf("registering collector: %v", err)
 			}
 
-			if len(names) != len(want) {
-				t.Errorf("got metrics %v, want exactly %v", names, keys(want))
+			request := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+			response := httptest.NewRecorder()
+			newMetricsHandler(registry).ServeHTTP(response, request)
+
+			if response.Code != test.wantStatus {
+				t.Fatalf("HTTP status = %d, want %d; body:\n%s",
+					response.Code, test.wantStatus, response.Body.String())
 			}
-			for _, name := range names {
-				if !want[name] {
-					t.Errorf("unexpected metric %q emitted on a failed scrape", name)
+			if test.wantPartialBody {
+				for _, want := range []string{
+					`spacelift_scrape_collector_success{collector="aggregates"} 0`,
+					"spacelift_worker_pool_runs_pending{",
+				} {
+					if !strings.Contains(response.Body.String(), want) {
+						t.Errorf("partial response is missing %q:\n%s", want, response.Body.String())
+					}
 				}
 			}
 		})
 	}
 }
 
-// TestGatherFailsOnQueryError records that a failed query currently makes the
-// whole registry Gather() fail, which is what makes promhttp return HTTP 500
-// and drives Prometheus's own up{} series to 0.
-func TestGatherFailsOnQueryError(t *testing.T) {
-	stub := newGraphQLStub(t, fixture(t, "machine-key"))
+// legacyMetrics are the 19 families the exporter shipped before per-collector
+// isolation. Every one must still be emitted.
+//
+// This exists because "the golden diff has 0 deletions" does not prove what it
+// looks like it proves: a metric that stops being emitted in every fixture
+// disappears from all of them, and a golden regeneration would happily record
+// its absence. This asserts presence directly.
+var legacyMetrics = []string{
+	"spacelift_public_worker_pool_runs_pending",
+	"spacelift_public_worker_pool_workers_busy",
+	"spacelift_public_worker_pool_parallelism",
+	"spacelift_worker_pool_runs_pending",
+	"spacelift_worker_pool_workers_busy",
+	"spacelift_worker_pool_workers",
+	"spacelift_worker_pool_workers_drained",
+	"spacelift_current_billing_period_start_timestamp_seconds",
+	"spacelift_current_billing_period_end_timestamp_seconds",
+	"spacelift_current_billing_period_used_private_seconds",
+	"spacelift_current_billing_period_used_public_seconds",
+	"spacelift_current_billing_period_used_seats",
+	"spacelift_current_stacks_count_by_state",
+	"spacelift_current_resources_count_by_drift",
+	"spacelift_current_avg_stack_size_by_resource_count",
+	"spacelift_current_average_run_duration",
+	"spacelift_current_median_run_duration",
+	"spacelift_scrape_duration_seconds",
+	"spacelift_build_info",
+}
 
-	registry := prometheus.NewPedanticRegistry()
-	if err := registry.Register(stub.collector(t)); err != nil {
-		t.Fatalf("registering collector: %v", err)
+// TestLegacyMetricsStillEmitted fails if any pre-existing metric family stops
+// being exported, independently of what the golden files happen to contain.
+func TestLegacyMetricsStillEmitted(t *testing.T) {
+	stub := newGraphQLStub(t, fixture(t, "saas"))
+	output := gather(t, stub.collector(t))
+
+	for _, name := range legacyMetrics {
+		if !strings.Contains(output, "\n"+name+"{") && !strings.Contains(output, "\n"+name+" ") {
+			t.Errorf("%s is no longer emitted; removing a shipped metric breaks every dashboard built on it", name)
+		}
 	}
 
-	if _, err := registry.Gather(); err == nil {
-		t.Error("Gather() succeeded on a failed query; expected an invalid-metric error")
+	if got, want := len(legacyMetrics), 19; got != want {
+		t.Errorf("legacyMetrics has %d entries, want %d; the shipped surface should not change", got, want)
 	}
 }
 
-// TestSessionRefreshedOnUnauthorized covers the retry path in client.Query,
-// which refreshes the token and reissues the request when the API reports the
-// session is no longer valid.
-func TestSessionRefreshedOnUnauthorized(t *testing.T) {
-	stub := newGraphQLStub(t, `{"errors":[{"message":"unauthorized"}]}`)
-	session := &fakeSession{endpoint: stub.server.URL}
-
-	collector := collectorWithSession(t, stub, session)
-
-	metrics := make(chan prometheus.Metric, 256)
-	collector.Collect(metrics)
-	close(metrics)
-
-	if session.refreshCalls != 1 {
-		t.Errorf("RefreshToken called %d times, want 1", session.refreshCalls)
+// TestGatedBackendDegradesGracefully covers backends that reject machine
+// sessions on publicWorkerPool, usage and metrics while serving workerPools.
+// Spacelift SaaS removed those gates in August 2026 (backend #16058), but
+// Self-Hosted releases older than that still have them, and under the old
+// single query they meant no metrics at all.
+func TestGatedBackendDegradesGracefully(t *testing.T) {
+	stub := newGraphQLStub(t, fixture(t, "saas"))
+	machineError := `{"errors":[{"message":"not available for machine sessions"}]}`
+	for _, operation := range []string{
+		"PrometheusExporterPublicWorkerPool",
+		"PrometheusExporterUsage",
+		"PrometheusExporterAggregates",
+	} {
+		stub.failOperation(operation, machineError)
 	}
 
-	if len(stub.queries) != 2 {
-		t.Errorf("got %d GraphQL requests, want 2 (original plus one retry)", len(stub.queries))
-	}
+	output := gather(t, stub.partialCollector(t))
 
-	wantAuthorization := []string{"Bearer initial-token", "Bearer refreshed-token"}
-	if len(stub.authorizationHeaders) != len(wantAuthorization) {
-		t.Fatalf("got Authorization headers %v, want %v", stub.authorizationHeaders, wantAuthorization)
-	}
-	for i, want := range wantAuthorization {
-		if got := stub.authorizationHeaders[i]; got != want {
-			t.Errorf("request %d Authorization header = %q, want %q", i+1, got, want)
+	// Gated collectors report unsupported, not failed: the key is fine,
+	// the data simply is not available to it.
+	for _, name := range []string{"publicworkerpool", "usage", "aggregates"} {
+		for _, want := range []string{
+			`spacelift_scrape_collector_supported{collector="` + name + `"} 0`,
+			`spacelift_scrape_collector_success{collector="` + name + `"} 1`,
+		} {
+			if !strings.Contains(output, want) {
+				t.Errorf("missing %q in:\n%s", want, output)
+			}
 		}
+	}
+
+	// And the ungated collector still works, which is the whole point.
+	if !strings.Contains(output, "spacelift_worker_pool_runs_pending{") {
+		t.Errorf("worker pool metrics should still be collected on a gated backend:\n%s", output)
 	}
 }
 
-// TestRetryPreservesOperationName guards a real bug: the retry in
-// client.Query reissues the request without graphql.OperationName, so the
-// second attempt reaches Spacelift as an anonymous query and cannot be
-// attributed to the exporter in their APM.
-func TestRetryPreservesOperationName(t *testing.T) {
-	stub := newGraphQLStub(t, `{"errors":[{"message":"unauthorized"}]}`)
-
-	metrics := make(chan prometheus.Metric, 256)
-	stub.collector(t).Collect(metrics)
-	close(metrics)
-
-	if len(stub.queries) < 2 {
-		t.Fatalf("expected a retry, got %d request(s)", len(stub.queries))
-	}
-
-	for i, query := range stub.queries {
-		if !strings.HasPrefix(query, "query PrometheusExporter{") {
-			t.Errorf("request %d query document lost the operation name: %s", i+1, query)
-		}
-		if got := stub.operationNames[i]; got != "PrometheusExporter" {
-			t.Errorf("request %d operationName envelope field = %q, want PrometheusExporter", i+1, got)
-		}
-	}
-}
-
-func keys(in map[string]bool) []string {
-	out := make([]string, 0, len(in))
-	for k := range in {
-		out = append(out, k)
+// The retry-path coverage that lived here (session refresh on unauthorized,
+// operation-name preservation across retries) moved to client/client_test.go,
+// where it also proves the refreshed bearer token is actually used and that
+// concurrent unauthorized responses trigger only one refresh.
+func operationNames(queries []string) []string {
+	out := make([]string, 0, len(queries))
+	for _, q := range queries {
+		out = append(out, operationOf(q))
 	}
 
 	return out
