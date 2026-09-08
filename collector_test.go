@@ -2,6 +2,8 @@ package main
 
 import (
 	"maps"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
@@ -23,6 +25,19 @@ func TestCollectGolden(t *testing.T) {
 			assertGolden(t, shape, gather(t, stub.collector(t)))
 		})
 	}
+}
+
+// TestCollectGoldenPartialFailure pins the exposition output of a partial-mode
+// scrape in which one collector fails: success=0 for the broken collector, the
+// healthy collectors' metrics present, and the failed collector's own families
+// absent rather than zeroed. Strict mode has no failure golden because a
+// failing strict scrape discards the gather entirely; that contract is pinned
+// by TestGatherErrorNamesTheFailingCollector.
+func TestCollectGoldenPartialFailure(t *testing.T) {
+	stub := newGraphQLStub(t, fixture(t, "saas"))
+	stub.failOperation("PrometheusExporter_Aggregates", `{"errors":[{"message":"internal error"}]}`)
+
+	assertGolden(t, "partial-failure", gather(t, stub.partialCollector(t)))
 }
 
 // TestDescribeMatchesCollect asserts that every descriptor announced by
@@ -245,6 +260,7 @@ func TestCollectorSurfacesQueryErrors(t *testing.T) {
 				"spacelift_scrape_duration_seconds":           true,
 				"spacelift_scrape_collector_duration_seconds": true,
 				"spacelift_scrape_collector_success":          true,
+				"spacelift_scrape_collector_supported":        true,
 				"spacelift_error":                             true,
 			}
 
@@ -273,5 +289,178 @@ func TestGatherFailsOnQueryError(t *testing.T) {
 
 	if _, err := registry.Gather(); err == nil {
 		t.Error("Gather() succeeded on a failed query; expected an invalid-metric error")
+	}
+}
+
+// TestCollectorsAreIsolated is the point of one document per collector: one
+// failing domain must not suppress the others. With partial scrapes enabled,
+// the stub fails the aggregates request while every other collector receives a
+// healthy response.
+func TestCollectorsAreIsolated(t *testing.T) {
+	stub := newGraphQLStub(t, fixture(t, "saas"))
+	stub.failOperation("PrometheusExporter_Aggregates", fixture(t, "partial-failure"))
+
+	output := gather(t, stub.partialCollector(t))
+
+	// The failing collector is reported, and only it.
+	for _, want := range []string{
+		`spacelift_scrape_collector_success{collector="aggregates"} 0`,
+		`spacelift_scrape_collector_success{collector="workerpools"} 1`,
+		`spacelift_scrape_collector_success{collector="usage"} 1`,
+		`spacelift_scrape_collector_success{collector="publicworkerpool"} 1`,
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("missing %q in:\n%s", want, output)
+		}
+	}
+
+	// The healthy collectors still produced their metrics.
+	for _, want := range []string{
+		"spacelift_worker_pool_runs_pending{",
+		"spacelift_current_billing_period_used_seats ",
+		"spacelift_public_worker_pool_parallelism ",
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("a failure in one collector suppressed %q:\n%s", want, output)
+		}
+	}
+
+	// The failing collector's metrics are absent rather than zeroed, so a
+	// stale value is never mistaken for a live one.
+	if strings.Contains(output, "spacelift_current_stacks_count_by_state{") {
+		t.Error("the failed collector emitted metrics anyway")
+	}
+}
+
+// TestMetricsHandlerPolicy is the HTTP-level contract of both scrape modes.
+func TestMetricsHandlerPolicy(t *testing.T) {
+	const (
+		internalError = `{"errors":[{"message":"internal error"}]}`
+		gatedError    = `{"errors":[{"message":"not available for machine sessions"}]}`
+	)
+
+	for _, test := range []struct {
+		name           string
+		partialScrapes bool
+		// responses overrides the aggregates operation, or every operation
+		// when failAll is set.
+		response   string
+		failAll    bool
+		wantStatus int
+		wantBody   []string
+	}{
+		{
+			name:       "strict: one failed collector fails the scrape",
+			response:   internalError,
+			wantStatus: http.StatusInternalServerError,
+			wantBody:   []string{"spacelift_error", "aggregates: "},
+		},
+		{
+			name:       "strict: one unsupported collector fails the scrape",
+			response:   gatedError,
+			wantStatus: http.StatusInternalServerError,
+			wantBody:   []string{"spacelift_error", "aggregates: not supported"},
+		},
+		{
+			name:           "partial: one failed collector is served around",
+			partialScrapes: true,
+			response:       internalError,
+			wantStatus:     http.StatusOK,
+			wantBody: []string{
+				`spacelift_scrape_collector_success{collector="aggregates"} 0`,
+				"spacelift_worker_pool_runs_pending{",
+			},
+		},
+		{
+			name:           "partial: an unsupported collector is healthy but unavailable",
+			partialScrapes: true,
+			response:       gatedError,
+			wantStatus:     http.StatusOK,
+			wantBody: []string{
+				`spacelift_scrape_collector_success{collector="aggregates"} 1`,
+				`spacelift_scrape_collector_supported{collector="aggregates"} 0`,
+			},
+		},
+		{
+			name:           "partial: every collector failing is still a failed scrape",
+			partialScrapes: true,
+			response:       internalError,
+			failAll:        true,
+			wantStatus:     http.StatusInternalServerError,
+			wantBody:       []string{"spacelift_error"},
+		},
+		{
+			// The flag's contract is that a scrape in which no collector
+			// succeeds returns HTTP 500. That must hold when everything is
+			// merely unsupported too, or a fully gated backend reads as a
+			// healthy target exporting zero data.
+			name:           "partial: every collector unsupported is still a failed scrape",
+			partialScrapes: true,
+			response:       gatedError,
+			failAll:        true,
+			wantStatus:     http.StatusInternalServerError,
+			wantBody:       []string{"spacelift_error", "not supported"},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			stub := newGraphQLStub(t, fixture(t, "saas"))
+			if test.failAll {
+				stub.response = test.response
+			} else {
+				stub.failOperation("PrometheusExporter_Aggregates", test.response)
+			}
+
+			registry := prometheus.NewPedanticRegistry()
+			if err := registry.Register(stub.collectorWithPartialScrapes(t, test.partialScrapes)); err != nil {
+				t.Fatalf("registering collector: %v", err)
+			}
+
+			response := httptest.NewRecorder()
+			newMetricsHandler(registry).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+
+			if response.Code != test.wantStatus {
+				t.Fatalf("HTTP status = %d, want %d; body:\n%s", response.Code, test.wantStatus, response.Body.String())
+			}
+			for _, want := range test.wantBody {
+				if !strings.Contains(response.Body.String(), want) {
+					t.Errorf("response is missing %q:\n%s", want, response.Body.String())
+				}
+			}
+		})
+	}
+}
+
+// TestGatedBackendDegradesGracefully covers backends that reject machine
+// sessions on publicWorkerPool, usage and metrics while serving workerPools,
+// which is how Self-Hosted releases older than August 2026 behave. Under the
+// old single document they meant no metrics at all.
+func TestGatedBackendDegradesGracefully(t *testing.T) {
+	stub := newGraphQLStub(t, fixture(t, "saas"))
+	for _, operation := range []string{
+		"PrometheusExporter_PublicWorkerPool",
+		"PrometheusExporter_Usage",
+		"PrometheusExporter_Aggregates",
+	} {
+		stub.failOperation(operation, `{"errors":[{"message":"not available for machine sessions"}]}`)
+	}
+
+	output := gather(t, stub.partialCollector(t))
+
+	// Gated collectors report unsupported, not failed: the key is fine, the
+	// data simply is not available to it.
+	for _, name := range []string{"publicworkerpool", "usage", "aggregates"} {
+		for _, want := range []string{
+			`spacelift_scrape_collector_supported{collector="` + name + `"} 0`,
+			`spacelift_scrape_collector_success{collector="` + name + `"} 1`,
+		} {
+			if !strings.Contains(output, want) {
+				t.Errorf("missing %q in:\n%s", want, output)
+			}
+		}
+	}
+
+	// And the ungated collector still works.
+	if !strings.Contains(output, "spacelift_worker_pool_runs_pending{") {
+		t.Errorf("worker pool metrics should still be collected on a gated backend:\n%s", output)
 	}
 }

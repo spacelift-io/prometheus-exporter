@@ -37,6 +37,12 @@ spacelift_scrape_collector_success{collector="aggregates"} 1
 spacelift_scrape_collector_success{collector="publicworkerpool"} 1
 spacelift_scrape_collector_success{collector="usage"} 1
 spacelift_scrape_collector_success{collector="workerpools"} 1
+# HELP spacelift_scrape_collector_supported Whether a collector's data is available on this deployment, tier and API key (1) or not (0). An unsupported collector is not a failure.
+# TYPE spacelift_scrape_collector_supported gauge
+spacelift_scrape_collector_supported{collector="aggregates"} 1
+spacelift_scrape_collector_supported{collector="publicworkerpool"} 1
+spacelift_scrape_collector_supported{collector="usage"} 1
+spacelift_scrape_collector_supported{collector="workerpools"} 1
 # HELP spacelift_scrape_duration_seconds The duration in seconds of the request to the Spacelift API for metrics
 # TYPE spacelift_scrape_duration_seconds gauge
 spacelift_scrape_duration_seconds <duration>
