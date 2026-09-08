@@ -1,6 +1,8 @@
 package main
 
 import (
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -128,7 +130,7 @@ func TestLintBaselineIsNotStale(t *testing.T) {
 	}
 }
 
-// TestQueryShape locks down the GraphQL document the exporter sends. The API
+// TestQueryShape locks down the GraphQL documents the exporter sends. The API
 // is expensive for Spacelift to serve for metrics, so the cost of a scrape is
 // part of this exporter's contract: a reviewer should be able to see, from a
 // test diff, that a change adds a field or a round trip.
@@ -139,31 +141,78 @@ func TestQueryShape(t *testing.T) {
 	stub.collector(t).Collect(metrics)
 	close(metrics)
 
-	if got := len(stub.queries); got != 1 {
-		t.Errorf("a scrape issued %d GraphQL requests, want exactly 1", got)
+	// One request per collector, and no more.
+	if got, want := len(stub.queries), len(newCollectors()); got != want {
+		t.Errorf("a scrape issued %d GraphQL requests, want %d (one per collector)", got, want)
 	}
 
-	query := stub.lastQuery(t)
-	const expectedQuery = `query PrometheusExporter{publicWorkerPool{parallelism,busyWorkers,pendingRuns},workerPools{id,name,pendingRuns,busyWorkers,workers{id,drained}},usage{billingPeriodStart,billingPeriodEnd,usedPrivateMinutes,usedPublicMinutes,usedSeats},metrics{stacksCountByState{value,labels},resourcesCountByDrift{value,labels},avgStackSizeByResourceCount{value,labels},averageRunDuration{value,labels},medianRunDuration{value,labels}}}`
-	if query != expectedQuery {
-		t.Errorf("GraphQL query changed without updating the API-cost contract\nwant: %s\n got: %s", expectedQuery, query)
+	// Each document is pinned exactly, and each carries a collector-specific
+	// operation name so that Spacelift can attribute API load to the part of
+	// the exporter responsible.
+	expectedQueries := map[string]string{
+		"PrometheusExporter_PublicWorkerPool": `query PrometheusExporter_PublicWorkerPool{publicWorkerPool{parallelism,busyWorkers,pendingRuns}}`,
+		"PrometheusExporter_WorkerPools":      `query PrometheusExporter_WorkerPools{workerPools{id,name,pendingRuns,busyWorkers,workers{id,drained}}}`,
+		"PrometheusExporter_Usage":            `query PrometheusExporter_Usage{usage{billingPeriodStart,billingPeriodEnd,usedPrivateMinutes,usedPublicMinutes,usedSeats}}`,
+		"PrometheusExporter_Aggregates":       `query PrometheusExporter_Aggregates{metrics{stacksCountByState{value,labels},resourcesCountByDrift{value,labels},avgStackSizeByResourceCount{value,labels},averageRunDuration{value,labels},medianRunDuration{value,labels}}}`,
 	}
 
-	// The operation name lets Spacelift attribute backend cost to the
-	// exporter in their own APM.
-	if !strings.HasPrefix(query, "query PrometheusExporter{") {
-		t.Errorf("query is not named PrometheusExporter: %s", query)
+	seen := map[string]string{}
+	for _, query := range stub.queries {
+		seen[operationOf(query)] = query
 	}
-	if len(stub.operationNames) != 1 || stub.operationNames[0] != "PrometheusExporter" {
-		t.Errorf("operationName envelope field = %v, want [PrometheusExporter]", stub.operationNames)
+
+	for operation, want := range expectedQueries {
+		got, ok := seen[operation]
+		if !ok {
+			t.Errorf("no request was named %s; got %v", operation, stub.operationNames)
+			continue
+		}
+		if got != want {
+			t.Errorf("%s changed without updating the API-cost contract\nwant: %s\n got: %s", operation, want, got)
+		}
+	}
+
+	// The envelope operationName must match the document, exactly once per
+	// collector. Compared as a sorted multiset so a duplicate of one valid
+	// name cannot mask another going missing.
+	envelopeNames := slices.Sorted(slices.Values(stub.operationNames))
+	wantNames := slices.Sorted(maps.Keys(expectedQueries))
+	if !slices.Equal(envelopeNames, wantNames) {
+		t.Errorf("operationName envelope fields = %v, want exactly %v", envelopeNames, wantNames)
 	}
 
 	// Range fields return a bucket per day over a server-chosen window.
 	// Prometheus should be given point-in-time values and left to do its
 	// own windowing, so none of these belong in a scrape.
-	for _, forbidden := range []string{"metricsRange", "Range{", "Range(", "averageRunDurationRange", "stackFailuresRange"} {
-		if strings.Contains(query, forbidden) {
-			t.Errorf("query selects the windowed field %q; Prometheus must do its own windowing", forbidden)
+	for _, query := range stub.queries {
+		for _, forbidden := range []string{"metricsRange", "Range{", "Range(", "averageRunDurationRange", "stackFailuresRange"} {
+			if strings.Contains(query, forbidden) {
+				t.Errorf("query selects the windowed field %q; Prometheus must do its own windowing", forbidden)
+			}
+		}
+	}
+}
+
+// TestGatherErrorNamesTheFailingCollector fails one collector's document and
+// leaves the rest healthy. The scrape still fails as a whole, as it always
+// has, and the Gather() error, which is the HTTP 500 body an operator sees,
+// names the collector that broke.
+func TestGatherErrorNamesTheFailingCollector(t *testing.T) {
+	stub := newGraphQLStub(t, fixture(t, "saas"))
+	stub.failOperation("PrometheusExporter_Aggregates", `{"errors":[{"message":"internal error"}]}`)
+
+	registry := prometheus.NewPedanticRegistry()
+	if err := registry.Register(stub.collector(t)); err != nil {
+		t.Fatalf("registering collector: %v", err)
+	}
+
+	_, err := registry.Gather()
+	if err == nil {
+		t.Fatal("Gather() succeeded with a failing collector; expected an invalid-metric error")
+	}
+	for _, want := range []string{"spacelift_error", "aggregates", "internal error"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("Gather() error %q does not mention %q", err, want)
 		}
 	}
 }
@@ -195,7 +244,7 @@ func TestCollectorSurfacesQueryErrors(t *testing.T) {
 			}
 
 			if len(names) != len(want) {
-				t.Errorf("got metrics %v, want exactly %v", names, keys(want))
+				t.Errorf("got metrics %v, want exactly %v", names, slices.Sorted(maps.Keys(want)))
 			}
 			for _, name := range names {
 				if !want[name] {
@@ -220,13 +269,4 @@ func TestGatherFailsOnQueryError(t *testing.T) {
 	if _, err := registry.Gather(); err == nil {
 		t.Error("Gather() succeeded on a failed query; expected an invalid-metric error")
 	}
-}
-
-func keys(in map[string]bool) []string {
-	out := make([]string, 0, len(in))
-	for k := range in {
-		out = append(out, k)
-	}
-
-	return out
 }
