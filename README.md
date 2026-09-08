@@ -185,7 +185,7 @@ spacelift-promex version 0.0.1
 ## Scrape failures
 
 Each scrape issues one GraphQL request per enabled collector (`publicworkerpool`, `workerpools`,
-`usage`, `aggregates`), all within the `--scrape-timeout` deadline. Disable a collector with
+`usage`, `aggregates`), concurrently, within one `--scrape-timeout` deadline. Disable a collector with
 `--no-collector.<name>` or `SPACELIFT_PROMEX_COLLECTOR_<NAME>=false`; a disabled collector issues
 no request and emits no series.
 
@@ -231,7 +231,7 @@ The following metrics are provided by the exporter:
 | `spacelift_scrape_collector_success`                       | `collector`                          | Whether the collector succeeded on the last scrape (1) or failed (0)                           |
 | `spacelift_scrape_collector_supported`                     | `collector`                          | Whether the collector's data is available on this deployment, tier and API key (1) or not (0) |
 | `spacelift_scrape_collector_duration_seconds`              | `collector`                          | The duration in seconds of the collector's request to the Spacelift API on the last scrape     |
-| `spacelift_scrape_duration_seconds`                        |                                      | The duration in seconds of the request to the Spacelift API for metrics                        |
+| `spacelift_scrape_duration_seconds`                        |                                      | The duration in seconds of the request to the Spacelift API for metrics (the whole scrape; collectors query concurrently) |
 | `spacelift_build_info`                                     |                                      | Contains build information about the exporter (version, commit, etc)                           |
 
 ## Example Dashboard

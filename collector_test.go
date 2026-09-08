@@ -155,9 +155,10 @@ func TestQueryShape(t *testing.T) {
 	metrics := make(chan prometheus.Metric, 256)
 	stub.collector(t).Collect(metrics)
 	close(metrics)
+	queries, operationNames := stub.recorded()
 
 	// One request per collector, and no more.
-	if got, want := len(stub.queries), len(newCollectors(nil)); got != want {
+	if got, want := len(queries), len(newCollectors(nil)); got != want {
 		t.Errorf("a scrape issued %d GraphQL requests, want %d (one per collector)", got, want)
 	}
 
@@ -172,14 +173,14 @@ func TestQueryShape(t *testing.T) {
 	}
 
 	seen := map[string]string{}
-	for _, query := range stub.queries {
+	for _, query := range queries {
 		seen[operationOf(query)] = query
 	}
 
 	for operation, want := range expectedQueries {
 		got, ok := seen[operation]
 		if !ok {
-			t.Errorf("no request was named %s; got %v", operation, stub.operationNames)
+			t.Errorf("no request was named %s; got %v", operation, operationNames)
 			continue
 		}
 		if got != want {
@@ -190,7 +191,7 @@ func TestQueryShape(t *testing.T) {
 	// The envelope operationName must match the document, exactly once per
 	// collector. Compared as a sorted multiset so a duplicate of one valid
 	// name cannot mask another going missing.
-	envelopeNames := slices.Sorted(slices.Values(stub.operationNames))
+	envelopeNames := slices.Sorted(slices.Values(operationNames))
 	wantNames := slices.Sorted(maps.Keys(expectedQueries))
 	if !slices.Equal(envelopeNames, wantNames) {
 		t.Errorf("operationName envelope fields = %v, want exactly %v", envelopeNames, wantNames)
@@ -199,7 +200,7 @@ func TestQueryShape(t *testing.T) {
 	// Range fields return a bucket per day over a server-chosen window.
 	// Prometheus should be given point-in-time values and left to do its
 	// own windowing, so none of these belong in a scrape.
-	for _, query := range stub.queries {
+	for _, query := range queries {
 		for _, forbidden := range []string{"metricsRange", "Range{", "Range(", "averageRunDurationRange", "stackFailuresRange"} {
 			if strings.Contains(query, forbidden) {
 				t.Errorf("query selects the windowed field %q; Prometheus must do its own windowing", forbidden)
