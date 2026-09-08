@@ -49,9 +49,11 @@ type Exporter struct {
 	scrapeTimeout time.Duration
 	collectors    []Collector
 
-	scrapeDuration *prometheus.Desc
-	buildInfo      *prometheus.Desc
-	scrapeError    *prometheus.Desc
+	collectorSuccess  *prometheus.Desc
+	collectorDuration *prometheus.Desc
+	scrapeDuration    *prometheus.Desc
+	buildInfo         *prometheus.Desc
+	scrapeError       *prometheus.Desc
 }
 
 // New returns an Exporter over the given collectors.
@@ -70,6 +72,16 @@ func New(
 		scrapeTimeout: scrapeTimeout,
 		collectors:    collectors,
 
+		collectorSuccess: prometheus.NewDesc(
+			"spacelift_scrape_collector_success",
+			"Whether a collector succeeded on the last scrape (1) or failed (0).",
+			[]string{"collector"},
+			nil),
+		collectorDuration: prometheus.NewDesc(
+			"spacelift_scrape_collector_duration_seconds",
+			"Duration of a collector's Spacelift API request on the last scrape.",
+			[]string{"collector"},
+			nil),
 		scrapeDuration: prometheus.NewDesc(
 			"spacelift_scrape_duration_seconds",
 			"The duration in seconds of the request to the Spacelift API for metrics",
@@ -97,6 +109,8 @@ func New(
 
 // Describe implements prometheus.Collector.
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
+	ch <- e.collectorSuccess
+	ch <- e.collectorDuration
 	ch <- e.scrapeDuration
 	ch <- e.buildInfo
 
@@ -107,10 +121,12 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect implements prometheus.Collector.
 //
-// The collectors run in order under one scrape deadline. Any collector error
-// fails the scrape: the spacelift_error invalid metric makes Gather() fail,
-// promhttp discards everything gathered and returns HTTP 500 naming the
-// collectors that failed, so existing alerting on `up` keeps working.
+// The collectors run in order under one scrape deadline. Each reports whether
+// it succeeded and how long its request took. Any collector error fails the
+// scrape: the spacelift_error invalid metric makes Gather() fail, promhttp
+// discards everything gathered and returns HTTP 500 naming the collectors that
+// failed, so existing alerting on `up` keeps working. The per-collector series
+// are therefore only served on scrapes where every collector succeeded.
 func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(e.ctx, e.scrapeTimeout)
@@ -120,14 +136,19 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	var failures []error
 
 	for _, c := range e.collectors {
+		collectorStart := time.Now()
 		collected, err := c.Collect(ctx, e.client)
+		ch <- prometheus.MustNewConstMetric(
+			e.collectorDuration, prometheus.GaugeValue, time.Since(collectorStart).Seconds(), c.Name())
+
+		success := 1.0
 		if err != nil {
+			success = 0
 			e.logger.Errorw("Failed to request metrics from the Spacelift API",
 				"collector", c.Name(), "timeout", e.scrapeTimeout, zap.Error(err))
 			failures = append(failures, fmt.Errorf("%s: %w", c.Name(), err))
-
-			continue
 		}
+		ch <- prometheus.MustNewConstMetric(e.collectorSuccess, prometheus.GaugeValue, success, c.Name())
 
 		metrics = append(metrics, collected...)
 	}

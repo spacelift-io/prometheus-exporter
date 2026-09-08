@@ -228,19 +228,24 @@ func TestCollectorSurfacesQueryErrors(t *testing.T) {
 
 			var names []string
 			for metric := range metrics {
-				names = append(names, fqName(t, metric.Desc().String()))
+				name := fqName(t, metric.Desc().String())
+				if !slices.Contains(names, name) {
+					names = append(names, name)
+				}
 			}
 
-			// Current behaviour: a single failing field costs the whole
-			// scrape. Everything except the scrape duration and the error
-			// marker is dropped, even when the response carried usable
-			// data alongside the error.
+			// Current behaviour: a failing collector costs the whole
+			// scrape. Everything except the scrape and per-collector
+			// health series and the error marker is dropped, even when
+			// other collectors returned usable data.
 			//
 			// This assertion is intentionally strict so that changing it
 			// is a deliberate, visible act.
 			want := map[string]bool{
-				"spacelift_scrape_duration_seconds": true,
-				"spacelift_error":                   true,
+				"spacelift_scrape_duration_seconds":           true,
+				"spacelift_scrape_collector_duration_seconds": true,
+				"spacelift_scrape_collector_success":          true,
+				"spacelift_error":                             true,
 			}
 
 			if len(names) != len(want) {

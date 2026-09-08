@@ -233,8 +233,9 @@ var (
 	// golden files would churn on every Go upgrade.
 	goversionLabel = regexp.MustCompile(`goversion="[^"]*"`)
 
-	// Scrape duration is wall-clock and differs on every run.
-	scrapeDurationValue = regexp.MustCompile(`(?m)^(spacelift_scrape_duration_seconds) .*$`)
+	// Durations are wall-clock and differ on every run.
+	scrapeDurationValue    = regexp.MustCompile(`(?m)^(spacelift_scrape_duration_seconds) .*$`)
+	collectorDurationValue = regexp.MustCompile(`(?m)^(spacelift_scrape_collector_duration_seconds\{[^}]*\}) .*$`)
 )
 
 // sanitize replaces the two values that legitimately vary between runs, so a
@@ -242,6 +243,7 @@ var (
 func sanitize(in string) string {
 	out := goversionLabel.ReplaceAllString(in, `goversion="<goversion>"`)
 	out = scrapeDurationValue.ReplaceAllString(out, `$1 <duration>`)
+	out = collectorDurationValue.ReplaceAllString(out, `$1 <duration>`)
 
 	return out
 }
