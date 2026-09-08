@@ -194,7 +194,7 @@ func (s *graphqlStub) collectorWithPartialScrapes(t *testing.T, partialScrapes b
 
 	ctx := logging.Init(context.Background(), true)
 	exporter, err := newExporter(
-		ctx, s.server.Client(), &fakeSession{endpoint: s.server.URL}, 5*time.Second, newCollectors(), partialScrapes)
+		ctx, s.server.Client(), &fakeSession{endpoint: s.server.URL}, 5*time.Second, newCollectors(nil), partialScrapes)
 	if err != nil {
 		t.Fatalf("newExporter: %v", err)
 	}
