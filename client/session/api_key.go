@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/hasura/go-graphql-client"
@@ -54,19 +55,34 @@ type apiKey struct {
 	apiToken
 	keyID  string
 	secret SecretProvider
+
+	// exchangeMutex serializes token exchanges. Callers that find the token
+	// stale at the same moment queue here and re-check freshness once they
+	// hold the lock, so a burst of concurrent callers costs one exchange.
+	exchangeMutex sync.Mutex
 }
 
 func (g *apiKey) BearerToken(ctx context.Context) (string, error) {
 	if !g.isFresh() {
-		if err := g.exchange(ctx); err != nil {
-			return "", err
+		g.exchangeMutex.Lock()
+		defer g.exchangeMutex.Unlock()
+
+		if !g.isFresh() {
+			if err := g.exchange(ctx); err != nil {
+				return "", err
+			}
 		}
 	}
 
 	return g.apiToken.BearerToken(ctx)
 }
 
+// RefreshToken always exchanges: the caller has just proven the current token
+// invalid, so freshness by expiry time is not to be trusted.
 func (g *apiKey) RefreshToken(ctx context.Context) error {
+	g.exchangeMutex.Lock()
+	defer g.exchangeMutex.Unlock()
+
 	return g.exchange(ctx)
 }
 

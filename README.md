@@ -167,6 +167,10 @@ OPTIONS:
    --listen-address value, -l value  The address to listen on for HTTP requests (default: ":9953") [$SPACELIFT_PROMEX_LISTEN_ADDRESS]
    --scrape-timeout value, -t value  The maximum duration to wait for a response from the Spacelift API during scraping (default: 5s) [$SPACELIFT_PROMEX_SCRAPE_TIMEOUT]
    --partial-scrapes                 Serve the metrics of the collectors that succeeded when another collector fails, instead of failing the whole scrape. A scrape in which no collector succeeds still returns HTTP 500 (default: false) [$SPACELIFT_PROMEX_PARTIAL_SCRAPES]
+   --[no-]collector.publicworkerpool Enable the publicworkerpool collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_PUBLICWORKERPOOL]
+   --[no-]collector.workerpools      Enable the workerpools collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_WORKERPOOLS]
+   --[no-]collector.usage            Enable the usage collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_USAGE]
+   --[no-]collector.aggregates       Enable the aggregates collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_AGGREGATES]
 ```
 
 ## Version
@@ -180,8 +184,10 @@ spacelift-promex version 0.0.1
 
 ## Scrape failures
 
-Each scrape issues one GraphQL request per collector (`publicworkerpool`, `workerpools`, `usage`,
-`aggregates`), all within the `--scrape-timeout` deadline.
+Each scrape issues one GraphQL request per enabled collector (`publicworkerpool`, `workerpools`,
+`usage`, `aggregates`), concurrently, within one `--scrape-timeout` deadline. Disable a collector with
+`--no-collector.<name>` or `SPACELIFT_PROMEX_COLLECTOR_<NAME>=false`; a disabled collector issues
+no request and emits no series.
 
 By default, an error from any collector fails the whole scrape: `/metrics` returns HTTP 500 and
 Prometheus records the target as down, so existing `up == 0` alerts keep working. The response body
@@ -225,7 +231,7 @@ The following metrics are provided by the exporter:
 | `spacelift_scrape_collector_success`                       | `collector`                          | Whether the collector succeeded on the last scrape (1) or failed (0)                           |
 | `spacelift_scrape_collector_supported`                     | `collector`                          | Whether the collector's data is available on this deployment, tier and API key (1) or not (0) |
 | `spacelift_scrape_collector_duration_seconds`              | `collector`                          | The duration in seconds of the collector's request to the Spacelift API on the last scrape     |
-| `spacelift_scrape_duration_seconds`                        |                                      | The duration in seconds of the request to the Spacelift API for metrics                        |
+| `spacelift_scrape_duration_seconds`                        |                                      | The duration in seconds of the request to the Spacelift API for metrics (the whole scrape; collectors query concurrently) |
 | `spacelift_build_info`                                     |                                      | Contains build information about the exporter (version, commit, etc)                           |
 
 ## Example Dashboard
