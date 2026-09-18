@@ -10,7 +10,10 @@ type loggerKeyType int
 
 const loggerKey loggerKeyType = iota
 
-var defaultLogger *zap.Logger
+// defaultLogger is a no-op until Init runs, so that code paths exercised
+// without Init (library callers, unit tests) log nothing rather than panic on
+// a nil logger.
+var defaultLogger = zap.NewNop()
 
 // Init initializes the logging framework, and returns a new context with a logger attached.
 func Init(ctx context.Context, isDevelopment bool) context.Context {

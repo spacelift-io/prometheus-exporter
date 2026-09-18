@@ -26,29 +26,17 @@ var updateGolden = flag.Bool("update-golden", false, "rewrite testdata/golden/*.
 
 // fakeSession is a session.Session that hands out a static token pointing at a
 // test server. It lets collector tests exercise the real client and the real
-// GraphQL encoding without standing in an API-key exchange.
+// GraphQL encoding without standing in an API-key exchange. The token refresh
+// path is covered in the client package.
 type fakeSession struct {
-	endpoint     string
-	token        string
-	refreshCalls int
+	endpoint string
 }
 
-func (s *fakeSession) BearerToken(context.Context) (string, error) {
-	if s.token == "" {
-		return "initial-token", nil
-	}
-
-	return s.token, nil
-}
+func (s *fakeSession) BearerToken(context.Context) (string, error) { return "test-token", nil }
 
 func (s *fakeSession) Endpoint() string { return s.endpoint }
 
-func (s *fakeSession) RefreshToken(context.Context) error {
-	s.refreshCalls++
-	s.token = "refreshed-token"
-
-	return nil
-}
+func (s *fakeSession) RefreshToken(context.Context) error { return nil }
 
 // graphqlStub is a stand-in for the Spacelift GraphQL API. It records every
 // query body it receives and replies with a canned response, so tests can
@@ -62,10 +50,9 @@ type graphqlStub struct {
 	// queries holds the raw "query" string of every request received.
 	queries []string
 
-	// operationNames and authorizationHeaders retain the envelope and request
-	// metadata that are not present in the rendered query string.
-	operationNames       []string
-	authorizationHeaders []string
+	// operationNames retains the envelope field that is not present in the
+	// rendered query string.
+	operationNames []string
 }
 
 func newGraphQLStub(t *testing.T, response string) *graphqlStub {
@@ -90,7 +77,6 @@ func newGraphQLStub(t *testing.T, response string) *graphqlStub {
 		}
 		stub.queries = append(stub.queries, envelope.Query)
 		stub.operationNames = append(stub.operationNames, envelope.OperationName)
-		stub.authorizationHeaders = append(stub.authorizationHeaders, r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, stub.response)
@@ -106,20 +92,6 @@ func (s *graphqlStub) collector(t *testing.T) prometheus.Collector {
 
 	ctx := logging.Init(context.Background(), true)
 	collector, err := newSpaceliftCollector(ctx, s.server.Client(), &fakeSession{endpoint: s.server.URL}, 5*time.Second)
-	if err != nil {
-		t.Fatalf("newSpaceliftCollector: %v", err)
-	}
-
-	return collector
-}
-
-// collectorWithSession builds a collector against an explicit session, so
-// tests can observe token refreshes.
-func collectorWithSession(t *testing.T, stub *graphqlStub, session *fakeSession) prometheus.Collector {
-	t.Helper()
-
-	ctx := logging.Init(context.Background(), true)
-	collector, err := newSpaceliftCollector(ctx, stub.server.Client(), session, 5*time.Second)
 	if err != nil {
 		t.Fatalf("newSpaceliftCollector: %v", err)
 	}

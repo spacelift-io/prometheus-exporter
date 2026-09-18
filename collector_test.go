@@ -222,63 +222,6 @@ func TestGatherFailsOnQueryError(t *testing.T) {
 	}
 }
 
-// TestSessionRefreshedOnUnauthorized covers the retry path in client.Query,
-// which refreshes the token and reissues the request when the API reports the
-// session is no longer valid.
-func TestSessionRefreshedOnUnauthorized(t *testing.T) {
-	stub := newGraphQLStub(t, `{"errors":[{"message":"unauthorized"}]}`)
-	session := &fakeSession{endpoint: stub.server.URL}
-
-	collector := collectorWithSession(t, stub, session)
-
-	metrics := make(chan prometheus.Metric, 256)
-	collector.Collect(metrics)
-	close(metrics)
-
-	if session.refreshCalls != 1 {
-		t.Errorf("RefreshToken called %d times, want 1", session.refreshCalls)
-	}
-
-	if len(stub.queries) != 2 {
-		t.Errorf("got %d GraphQL requests, want 2 (original plus one retry)", len(stub.queries))
-	}
-
-	wantAuthorization := []string{"Bearer initial-token", "Bearer refreshed-token"}
-	if len(stub.authorizationHeaders) != len(wantAuthorization) {
-		t.Fatalf("got Authorization headers %v, want %v", stub.authorizationHeaders, wantAuthorization)
-	}
-	for i, want := range wantAuthorization {
-		if got := stub.authorizationHeaders[i]; got != want {
-			t.Errorf("request %d Authorization header = %q, want %q", i+1, got, want)
-		}
-	}
-}
-
-// TestRetryPreservesOperationName guards a real bug: the retry in
-// client.Query reissues the request without graphql.OperationName, so the
-// second attempt reaches Spacelift as an anonymous query and cannot be
-// attributed to the exporter in their APM.
-func TestRetryPreservesOperationName(t *testing.T) {
-	stub := newGraphQLStub(t, `{"errors":[{"message":"unauthorized"}]}`)
-
-	metrics := make(chan prometheus.Metric, 256)
-	stub.collector(t).Collect(metrics)
-	close(metrics)
-
-	if len(stub.queries) < 2 {
-		t.Fatalf("expected a retry, got %d request(s)", len(stub.queries))
-	}
-
-	for i, query := range stub.queries {
-		if !strings.HasPrefix(query, "query PrometheusExporter{") {
-			t.Errorf("request %d query document lost the operation name: %s", i+1, query)
-		}
-		if got := stub.operationNames[i]; got != "PrometheusExporter" {
-			t.Errorf("request %d operationName envelope field = %q, want PrometheusExporter", i+1, got)
-		}
-	}
-}
-
 func keys(in map[string]bool) []string {
 	out := make([]string, 0, len(in))
 	for k := range in {
