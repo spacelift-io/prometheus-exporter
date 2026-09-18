@@ -18,8 +18,11 @@ The exporter uses
 to authenticate, and also needs to know your Spacelift account API endpoint. Your API endpoint is in
 the format `https://<account>.app.spacelift.io`, for example `https://my-account.app.spacelift.io`.
 
-**NOTE:** the API key you use must be an Admin key because some of the API fields used for the metrics
-require administrative access.
+**NOTE:** on current Spacelift SaaS any API key works, provided it can read the root space (the
+`usage` field requires it). Self-Hosted releases older than August 2026 restrict `publicWorkerPool`,
+`usage` and `metrics` to non-machine keys; on such a release, run the exporter with an admin user's
+key or with `--partial-scrapes`, which serves the private worker pool metrics and reports the
+restricted collectors as unsupported (see below).
 
 #### OIDC API keys with rotating secrets
 
@@ -163,6 +166,7 @@ OPTIONS:
    --is-development, -d              Uses settings appropriate during local development (default: false) [$SPACELIFT_PROMEX_IS_DEVELOPMENT]
    --listen-address value, -l value  The address to listen on for HTTP requests (default: ":9953") [$SPACELIFT_PROMEX_LISTEN_ADDRESS]
    --scrape-timeout value, -t value  The maximum duration to wait for a response from the Spacelift API during scraping (default: 5s) [$SPACELIFT_PROMEX_SCRAPE_TIMEOUT]
+   --partial-scrapes                 Serve the metrics of the collectors that succeeded when another collector fails, instead of failing the whole scrape. A scrape in which no collector succeeds still returns HTTP 500 (default: false) [$SPACELIFT_PROMEX_PARTIAL_SCRAPES]
 ```
 
 ## Version
@@ -173,6 +177,27 @@ To get version information, use the `--version` flag:
 $ spacelift-promex --version
 spacelift-promex version 0.0.1
 ```
+
+## Scrape failures
+
+Each scrape issues one GraphQL request per collector (`publicworkerpool`, `workerpools`, `usage`,
+`aggregates`), all within the `--scrape-timeout` deadline.
+
+By default, an error from any collector fails the whole scrape: `/metrics` returns HTTP 500 and
+Prometheus records the target as down, so existing `up == 0` alerts keep working. The response body
+names the collector that failed.
+
+With `--partial-scrapes` (or `SPACELIFT_PROMEX_PARTIAL_SCRAPES=true`), `/metrics` returns HTTP 200
+with the metrics of the collectors that succeeded, and the scrape fails only when no collector
+succeeds. Alert on the individual collectors instead of, or as well as, the target:
+
+```promql
+spacelift_scrape_collector_success == 0
+```
+
+`spacelift_scrape_collector_supported == 0` means the deployment, tier or API key cannot supply that
+collector's data at all. It is not a failure, and in partial mode it does not fail the scrape
+while any collector still succeeds.
 
 ## Available Metrics
 
@@ -198,6 +223,7 @@ The following metrics are provided by the exporter:
 | `spacelift_current_average_run_duration`                   |                                      | The average run duration                                                                       |
 | `spacelift_current_median_run_duration`                    |                                      | The median run duration                                                                        |
 | `spacelift_scrape_collector_success`                       | `collector`                          | Whether the collector succeeded on the last scrape (1) or failed (0)                           |
+| `spacelift_scrape_collector_supported`                     | `collector`                          | Whether the collector's data is available on this deployment, tier and API key (1) or not (0) |
 | `spacelift_scrape_collector_duration_seconds`              | `collector`                          | The duration in seconds of the collector's request to the Spacelift API on the last scrape     |
 | `spacelift_scrape_duration_seconds`                        |                                      | The duration in seconds of the request to the Spacelift API for metrics                        |
 | `spacelift_build_info`                                     |                                      | Contains build information about the exporter (version, commit, etc)                           |

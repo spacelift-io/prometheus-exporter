@@ -174,12 +174,27 @@ func newGraphQLStub(t *testing.T, response string) *graphqlStub {
 	return stub
 }
 
-// collector builds a real exporter over every collector, wired to the stub.
+// collector builds a real exporter over every collector, wired to the stub,
+// with the default (strict) failure policy.
 func (s *graphqlStub) collector(t *testing.T) prometheus.Collector {
 	t.Helper()
 
+	return s.collectorWithPartialScrapes(t, false)
+}
+
+// partialCollector is collector with --partial-scrapes enabled.
+func (s *graphqlStub) partialCollector(t *testing.T) prometheus.Collector {
+	t.Helper()
+
+	return s.collectorWithPartialScrapes(t, true)
+}
+
+func (s *graphqlStub) collectorWithPartialScrapes(t *testing.T, partialScrapes bool) prometheus.Collector {
+	t.Helper()
+
 	ctx := logging.Init(context.Background(), true)
-	exporter, err := newExporter(ctx, s.server.Client(), &fakeSession{endpoint: s.server.URL}, 5*time.Second, newCollectors())
+	exporter, err := newExporter(
+		ctx, s.server.Client(), &fakeSession{endpoint: s.server.URL}, 5*time.Second, newCollectors(), partialScrapes)
 	if err != nil {
 		t.Fatalf("newExporter: %v", err)
 	}

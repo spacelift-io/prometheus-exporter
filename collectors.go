@@ -32,6 +32,7 @@ func newExporter(
 	session session.Session,
 	scrapeTimeout time.Duration,
 	collectors []collector.Collector,
+	partialScrapes bool,
 ) (*collector.Exporter, error) {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
@@ -45,5 +46,6 @@ func newExporter(
 		scrapeTimeout,
 		collector.BuildInfo{Version: version, Commit: commit, GoVersion: info.GoVersion},
 		collectors,
+		partialScrapes,
 	), nil
 }

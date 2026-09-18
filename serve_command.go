@@ -98,6 +98,13 @@ var (
 		Value:       time.Second * 5,
 		Destination: &scrapeTimeout,
 	}
+
+	flagPartialScrapes = &cli.BoolFlag{
+		Name: "partial-scrapes",
+		Usage: "Serve the metrics of the collectors that succeeded when another collector fails, instead of " +
+			"failing the whole scrape. A scrape in which no collector succeeds still returns HTTP 500",
+		Sources: cli.EnvVars("SPACELIFT_PROMEX_PARTIAL_SCRAPES"),
+	}
 )
 
 var serveCommand *cli.Command = &cli.Command{
@@ -110,6 +117,7 @@ var serveCommand *cli.Command = &cli.Command{
 		flagAPIKeyID,
 		flagIsDevelopment,
 		flagScrapeTimeout,
+		flagPartialScrapes,
 	},
 	MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{
 		{
@@ -171,20 +179,14 @@ var serveCommand *cli.Command = &cli.Command{
 		// Create a new registry.
 		reg := prometheus.NewRegistry()
 
-		exporter, err := newExporter(ctx, httpClient, session, scrapeTimeout, newCollectors())
+		exporter, err := newExporter(ctx, httpClient, session, scrapeTimeout, newCollectors(), cmd.Bool(flagPartialScrapes.Name))
 		if err != nil {
 			return cli.Exit(fmt.Sprintf("could not create Spacelift collector: %v", err), ExitCodeStartupError)
 		}
 		reg.MustRegister(exporter)
 
 		// Expose the registered metrics via HTTP.
-		http.Handle("/metrics", promhttp.HandlerFor(
-			reg,
-			promhttp.HandlerOpts{
-				// Opt into OpenMetrics to support exemplars.
-				EnableOpenMetrics: true,
-			},
-		))
+		http.Handle("/metrics", newMetricsHandler(reg))
 
 		http.Handle("/health", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Countdown complete - ready to serve metrics!"))
@@ -217,6 +219,16 @@ var serveCommand *cli.Command = &cli.Command{
 
 		return nil
 	},
+}
+
+func newMetricsHandler(gatherer prometheus.Gatherer) http.Handler {
+	return promhttp.HandlerFor(
+		gatherer,
+		promhttp.HandlerOpts{
+			// Opt into OpenMetrics to support exemplars.
+			EnableOpenMetrics: true,
+		},
+	)
 }
 
 func newHTTPClient(caCertPath string) (*http.Client, error) {
