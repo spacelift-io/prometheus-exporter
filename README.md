@@ -197,6 +197,8 @@ The following metrics are provided by the exporter:
 | `spacelift_current_avg_stack_size_by_resource_count`       |                                      | The average stack size by resource count                                                       |
 | `spacelift_current_average_run_duration`                   |                                      | The average run duration                                                                       |
 | `spacelift_current_median_run_duration`                    |                                      | The median run duration                                                                        |
+| `spacelift_scrape_collector_success`                       | `collector`                          | Whether the collector succeeded on the last scrape (1) or failed (0)                           |
+| `spacelift_scrape_collector_duration_seconds`              | `collector`                          | The duration in seconds of the collector's request to the Spacelift API on the last scrape     |
 | `spacelift_scrape_duration_seconds`                        |                                      | The duration in seconds of the request to the Spacelift API for metrics                        |
 | `spacelift_build_info`                                     |                                      | Contains build information about the exporter (version, commit, etc)                           |
 
