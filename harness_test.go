@@ -44,8 +44,14 @@ func (s *fakeSession) RefreshToken(context.Context) error { return nil }
 type graphqlStub struct {
 	server *httptest.Server
 
-	// response is written verbatim as the HTTP body.
+	// response is a whole-account fixture. Each request receives the slice
+	// of it that its document selected; see projectFixture.
 	response string
+
+	// overrides maps a GraphQL operation name to a response body that
+	// replaces the fixture for that operation only, so a test can fail one
+	// collector and leave the rest healthy.
+	overrides map[string]string
 
 	// queries holds the raw "query" string of every request received.
 	queries []string
@@ -53,6 +59,76 @@ type graphqlStub struct {
 	// operationNames retains the envelope field that is not present in the
 	// rendered query string.
 	operationNames []string
+}
+
+// failOperation makes the named operation return the given body while every
+// other collector keeps receiving the fixture. Without one document per
+// collector there would be no way to fail one and not the others.
+func (s *graphqlStub) failOperation(operation, response string) {
+	if s.overrides == nil {
+		s.overrides = map[string]string{}
+	}
+
+	s.overrides[operation] = response
+}
+
+// operationOf extracts the operation name from a query document.
+func operationOf(query string) string {
+	name, _, _ := strings.Cut(strings.TrimPrefix(query, "query "), "{")
+
+	return strings.TrimSpace(name)
+}
+
+// operationRootFields maps each collector's GraphQL operation name to the
+// single root field it selects, so the stub can serve the right slice of a
+// whole-account fixture the way the real server would. A new collector adds
+// one entry.
+var operationRootFields = map[string]string{
+	"PrometheusExporter_PublicWorkerPool": "publicWorkerPool",
+	"PrometheusExporter_WorkerPools":      "workerPools",
+	"PrometheusExporter_Usage":            "usage",
+	"PrometheusExporter_Aggregates":       "metrics",
+}
+
+// projectFixture narrows a whole-account fixture to the one root field a
+// collector asked for.
+//
+// Fixtures describe an account, not a query, which keeps them readable and
+// lets one file cover every collector. The GraphQL decoder rejects response
+// fields the query did not select, so the stub does the narrowing a real
+// server does. Errors are passed through unchanged: a fixture that carries an
+// error fails every document, which is what TestCollectorSurfacesQueryErrors
+// relies on.
+func projectFixture(t *testing.T, response string, field string) string {
+	t.Helper()
+
+	var envelope struct {
+		Data   map[string]json.RawMessage `json:"data"`
+		Errors json.RawMessage            `json:"errors,omitempty"`
+	}
+	if err := json.Unmarshal([]byte(response), &envelope); err != nil {
+		// Not a well-formed envelope: the test is asserting on a
+		// malformed response, so pass it through untouched.
+		return response
+	}
+
+	var projected map[string]json.RawMessage
+	if envelope.Data != nil {
+		projected = map[string]json.RawMessage{}
+		if value, ok := envelope.Data[field]; ok {
+			projected[field] = value
+		}
+	}
+
+	out, err := json.Marshal(struct {
+		Data   map[string]json.RawMessage `json:"data"`
+		Errors json.RawMessage            `json:"errors,omitempty"`
+	}{Data: projected, Errors: envelope.Errors})
+	if err != nil {
+		t.Fatalf("re-marshalling projected fixture: %v", err)
+	}
+
+	return string(out)
 }
 
 func newGraphQLStub(t *testing.T, response string) *graphqlStub {
@@ -78,25 +154,37 @@ func newGraphQLStub(t *testing.T, response string) *graphqlStub {
 		stub.queries = append(stub.queries, envelope.Query)
 		stub.operationNames = append(stub.operationNames, envelope.OperationName)
 
+		response, overridden := stub.overrides[envelope.OperationName]
+		if !overridden {
+			field, known := operationRootFields[envelope.OperationName]
+			if !known {
+				// Refuse to improvise: serving an empty response here would
+				// let a collector missing from the map pass every test on
+				// all-zero data.
+				t.Errorf("stub received unknown operation %q; add it to operationRootFields", envelope.OperationName)
+			}
+			response = projectFixture(t, stub.response, field)
+		}
+
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, stub.response)
+		_, _ = io.WriteString(w, response)
 	}))
 	t.Cleanup(stub.server.Close)
 
 	return stub
 }
 
-// collector builds a real spaceliftCollector wired to the stub.
+// collector builds a real exporter over every collector, wired to the stub.
 func (s *graphqlStub) collector(t *testing.T) prometheus.Collector {
 	t.Helper()
 
 	ctx := logging.Init(context.Background(), true)
-	collector, err := newSpaceliftCollector(ctx, s.server.Client(), &fakeSession{endpoint: s.server.URL}, 5*time.Second)
+	exporter, err := newExporter(ctx, s.server.Client(), &fakeSession{endpoint: s.server.URL}, 5*time.Second, newCollectors())
 	if err != nil {
-		t.Fatalf("newSpaceliftCollector: %v", err)
+		t.Fatalf("newExporter: %v", err)
 	}
 
-	return collector
+	return exporter
 }
 
 var descFQName = regexp.MustCompile(`fqName: "([^"]+)"`)
@@ -112,18 +200,6 @@ func fqName(t *testing.T, desc string) string {
 	}
 
 	return match[1]
-}
-
-// lastQuery returns the most recent GraphQL query body, with runs of
-// whitespace collapsed so assertions can be written readably.
-func (s *graphqlStub) lastQuery(t *testing.T) string {
-	t.Helper()
-
-	if len(s.queries) == 0 {
-		t.Fatal("no GraphQL queries were recorded")
-	}
-
-	return regexp.MustCompile(`\s+`).ReplaceAllString(s.queries[len(s.queries)-1], " ")
 }
 
 // gather registers the collector on a pedantic registry (which validates
