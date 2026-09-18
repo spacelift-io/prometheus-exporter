@@ -107,10 +107,36 @@ var (
 	}
 )
 
+// collectorCLIFlags returns one --[no-]collector.<name> flag per collector, in
+// the node_exporter idiom.
+func collectorCLIFlags() []cli.Flag {
+	flags := make([]cli.Flag, 0, len(collectorSpecs))
+	for _, spec := range collectorSpecs {
+		flags = append(flags, &cli.BoolWithInverseFlag{
+			Name:    "collector." + spec.name,
+			Usage:   "Enable the " + spec.name + " collector",
+			Value:   spec.defaultEnabled,
+			Sources: cli.EnvVars("SPACELIFT_PROMEX_COLLECTOR_" + strings.ToUpper(spec.name)),
+		})
+	}
+
+	return flags
+}
+
+// collectorSelection reads the collector flags into the map newCollectors takes.
+func collectorSelection(cmd *cli.Command) map[string]bool {
+	out := make(map[string]bool, len(collectorSpecs))
+	for _, spec := range collectorSpecs {
+		out[spec.name] = cmd.Bool("collector." + spec.name)
+	}
+
+	return out
+}
+
 var serveCommand *cli.Command = &cli.Command{
 	Name:  "serve",
 	Usage: "Starts the Prometheus exporter",
-	Flags: []cli.Flag{
+	Flags: append([]cli.Flag{
 		flagListenAddress,
 		flagAPIEndpoint,
 		flagCACertPath,
@@ -118,7 +144,7 @@ var serveCommand *cli.Command = &cli.Command{
 		flagIsDevelopment,
 		flagScrapeTimeout,
 		flagPartialScrapes,
-	},
+	}, collectorCLIFlags()...),
 	MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{
 		{
 			Required: true,
@@ -179,11 +205,22 @@ var serveCommand *cli.Command = &cli.Command{
 		// Create a new registry.
 		reg := prometheus.NewRegistry()
 
-		exporter, err := newExporter(ctx, httpClient, session, scrapeTimeout, newCollectors(), cmd.Bool(flagPartialScrapes.Name))
+		collectors := newCollectors(collectorSelection(cmd))
+		if len(collectors) == 0 {
+			return cli.Exit("every collector is disabled, so there would be nothing to export", ExitCodeStartupError)
+		}
+
+		exporter, err := newExporter(ctx, httpClient, session, scrapeTimeout, collectors, cmd.Bool(flagPartialScrapes.Name))
 		if err != nil {
 			return cli.Exit(fmt.Sprintf("could not create Spacelift collector: %v", err), ExitCodeStartupError)
 		}
 		reg.MustRegister(exporter)
+
+		names := make([]string, 0, len(collectors))
+		for _, c := range collectors {
+			names = append(names, c.Name())
+		}
+		logger.Infow("Collectors enabled", "collectors", strings.Join(names, ", "))
 
 		// Expose the registered metrics via HTTP.
 		http.Handle("/metrics", newMetricsHandler(reg))

@@ -157,7 +157,7 @@ func TestQueryShape(t *testing.T) {
 	close(metrics)
 
 	// One request per collector, and no more.
-	if got, want := len(stub.queries), len(newCollectors()); got != want {
+	if got, want := len(stub.queries), len(newCollectors(nil)); got != want {
 		t.Errorf("a scrape issued %d GraphQL requests, want %d (one per collector)", got, want)
 	}
 
