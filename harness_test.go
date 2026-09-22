@@ -10,7 +10,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -44,6 +46,9 @@ func (s *fakeSession) RefreshToken(context.Context) error { return nil }
 type graphqlStub struct {
 	server *httptest.Server
 
+	// mutex guards queries and operationNames: collectors query concurrently.
+	mutex sync.Mutex
+
 	// response is a whole-account fixture. Each request receives the slice
 	// of it that its document selected; see projectFixture.
 	response string
@@ -70,6 +75,15 @@ func (s *graphqlStub) failOperation(operation, response string) {
 	}
 
 	s.overrides[operation] = response
+}
+
+// recorded returns copies of the queries and envelope operation names received
+// so far, in arrival order.
+func (s *graphqlStub) recorded() (queries, operationNames []string) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	return slices.Clone(s.queries), slices.Clone(s.operationNames)
 }
 
 // operationOf extracts the operation name from a query document.
@@ -151,8 +165,10 @@ func newGraphQLStub(t *testing.T, response string) *graphqlStub {
 			t.Errorf("unmarshalling stub request body %q: %v", body, err)
 			return
 		}
+		stub.mutex.Lock()
 		stub.queries = append(stub.queries, envelope.Query)
 		stub.operationNames = append(stub.operationNames, envelope.OperationName)
+		stub.mutex.Unlock()
 
 		response, overridden := stub.overrides[envelope.OperationName]
 		if !overridden {

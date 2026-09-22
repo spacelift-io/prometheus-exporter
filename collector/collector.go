@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -137,9 +138,10 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect implements prometheus.Collector.
 //
-// The collectors run in order under one scrape deadline. Each reports whether
+// The collectors run concurrently under one scrape deadline, so scrape latency
+// is bounded by the slowest collector rather than the sum. Each reports whether
 // it succeeded, whether its data is available at all, and how long its request
-// took.
+// took. A collector that panics fails like one that returned an error.
 //
 // By default any collector error or unsupported result fails the scrape: the
 // spacelift_error invalid metric makes Gather() fail, promhttp discards
@@ -156,18 +158,24 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	ctx, cancel := context.WithTimeout(e.ctx, e.scrapeTimeout)
 	defer cancel()
 
+	results := make([]collectionResult, len(e.collectors))
+	var waitGroup sync.WaitGroup
+	for index, c := range e.collectors {
+		waitGroup.Go(func() { results[index] = e.collect(ctx, c) })
+	}
+	waitGroup.Wait()
+
 	var metrics []prometheus.Metric
 	var issues []error
 	failed, succeeded := 0, 0
 
-	for _, c := range e.collectors {
-		collectorStart := time.Now()
-		collected, err := c.Collect(ctx, e.client)
+	for index, c := range e.collectors {
+		result := results[index]
 		ch <- prometheus.MustNewConstMetric(
-			e.collectorDuration, prometheus.GaugeValue, time.Since(collectorStart).Seconds(), c.Name())
+			e.collectorDuration, prometheus.GaugeValue, result.duration.Seconds(), c.Name())
 
 		success, supported := 1.0, 1.0
-		switch err = classify(err); {
+		switch err := classify(result.err); {
 		case errors.Is(err, ErrNotSupported):
 			supported = 0
 			log := e.logger.Debugw
@@ -188,7 +196,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(e.collectorSuccess, prometheus.GaugeValue, success, c.Name())
 		ch <- prometheus.MustNewConstMetric(e.collectorSupported, prometheus.GaugeValue, supported, c.Name())
 
-		metrics = append(metrics, collected...)
+		metrics = append(metrics, result.metrics...)
 	}
 
 	ch <- prometheus.MustNewConstMetric(e.scrapeDuration, prometheus.GaugeValue, time.Since(start).Seconds())
@@ -203,4 +211,26 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	for _, metric := range metrics {
 		ch <- metric
 	}
+}
+
+type collectionResult struct {
+	metrics  []prometheus.Metric
+	err      error
+	duration time.Duration
+}
+
+// collect runs one collector, timing it and turning a panic into an error so
+// that a bug in one collector cannot take the process down.
+func (e *Exporter) collect(ctx context.Context, c Collector) (result collectionResult) {
+	start := time.Now()
+	defer func() {
+		result.duration = time.Since(start)
+		if recovered := recover(); recovered != nil {
+			result.metrics, result.err = nil, fmt.Errorf("collector panicked: %v", recovered)
+		}
+	}()
+
+	result.metrics, result.err = c.Collect(ctx, e.client)
+
+	return result
 }
