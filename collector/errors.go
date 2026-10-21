@@ -22,14 +22,27 @@ var ErrNotSupported = errors.New("not supported on this Spacelift deployment")
 // worse: on a gated backend the ungated collectors still work.
 const machineSessionError = "not available for machine sessions"
 
+// missingFieldError starts the validation error the API returns for a field
+// its schema does not have, as on a Self-Hosted release older than the field.
+// The document is otherwise valid, so the collector is not broken: this
+// backend cannot supply its data. TestQueryShape pins every document, so a
+// typo in one fails there rather than hiding behind this.
+const missingFieldError = "Cannot query field"
+
 // classify marks an API error as ErrNotSupported when the field is simply
-// unavailable to this session, and leaves genuine failures alone. The original
-// error is kept in the chain: it is the only place the API's own message
-// survives, and the strict-mode failure body and the logs would otherwise
-// report a bare sentinel.
+// unavailable to this session or deployment, and leaves genuine failures
+// alone. The original error is kept in the chain: it is the only place the
+// API's own message survives, and the strict-mode failure body and the logs
+// would otherwise report a bare sentinel.
 func classify(err error) error {
-	if err != nil && strings.Contains(err.Error(), machineSessionError) {
-		return fmt.Errorf("%w: %v", ErrNotSupported, err)
+	if err == nil {
+		return nil
+	}
+
+	for _, unsupported := range []string{machineSessionError, missingFieldError} {
+		if strings.Contains(err.Error(), unsupported) {
+			return fmt.Errorf("%w: %v", ErrNotSupported, err)
+		}
 	}
 
 	return err

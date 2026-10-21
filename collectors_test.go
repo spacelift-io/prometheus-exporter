@@ -30,6 +30,11 @@ func TestNewCollectorsHonoursDefaultsAndOverrides(t *testing.T) {
 			want: []string{"publicworkerpool", "workerpools", "usage", "aggregates"},
 		},
 		{
+			name:    "enable an opt-in collector",
+			enabled: map[string]bool{"workerstatus": true},
+			want:    []string{"publicworkerpool", "workerpools", "usage", "aggregates", "workerstatus"},
+		},
+		{
 			name:    "disable one",
 			enabled: map[string]bool{"usage": false},
 			want:    []string{"publicworkerpool", "workerpools", "aggregates"},
@@ -62,6 +67,11 @@ func TestCollectorFlagsDisableCollectors(t *testing.T) {
 		{
 			name: "defaults",
 			want: []string{"publicworkerpool", "workerpools", "usage", "aggregates"},
+		},
+		{
+			name: "opt-in flag",
+			args: []string{"--collector.workerstatus"},
+			want: []string{"publicworkerpool", "workerpools", "usage", "aggregates", "workerstatus"},
 		},
 		{
 			name: "inverse flag",

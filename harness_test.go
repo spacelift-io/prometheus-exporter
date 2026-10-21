@@ -1,14 +1,19 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
+	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -64,6 +69,10 @@ type graphqlStub struct {
 	// operationNames retains the envelope field that is not present in the
 	// rendered query string.
 	operationNames []string
+
+	// variables holds the compacted "variables" JSON of every request, keyed
+	// by operation name, and "" for a request that sent none.
+	variables map[string]string
 }
 
 // failOperation makes the named operation return the given body while every
@@ -86,34 +95,121 @@ func (s *graphqlStub) recorded() (queries, operationNames []string) {
 	return slices.Clone(s.queries), slices.Clone(s.operationNames)
 }
 
-// operationOf extracts the operation name from a query document.
+// recordedVariables returns a copy of the variables each operation sent.
+func (s *graphqlStub) recordedVariables() map[string]string {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	return maps.Clone(s.variables)
+}
+
+// operationOf extracts the operation name from a query document. The name ends
+// at the variable declarations, if any, or at the selection set.
 func operationOf(query string) string {
 	name, _, _ := strings.Cut(strings.TrimPrefix(query, "query "), "{")
+	name, _, _ = strings.Cut(name, "(")
 
 	return strings.TrimSpace(name)
 }
 
-// operationRootFields maps each collector's GraphQL operation name to the
-// single root field it selects, so the stub can serve the right slice of a
-// whole-account fixture the way the real server would. A new collector adds
-// one entry.
-var operationRootFields = map[string]string{
-	"PrometheusExporter_PublicWorkerPool": "publicWorkerPool",
-	"PrometheusExporter_WorkerPools":      "workerPools",
-	"PrometheusExporter_Usage":            "usage",
-	"PrometheusExporter_Aggregates":       "metrics",
+// selection is one field of a parsed GraphQL selection set. key is the name
+// the field takes in the response, which is its alias when it has one.
+type selection struct {
+	key      string
+	field    string
+	children []selection
 }
 
-// projectFixture narrows a whole-account fixture to the one root field a
-// collector asked for.
+// parseSelections parses the selection set of a minified query document, as
+// the GraphQL client renders it: fields, aliases, nested selection sets and
+// argument lists, which are skipped. It is not a GraphQL parser; it reads only
+// the documents this exporter sends.
+func parseSelections(query string) ([]selection, error) {
+	start := strings.Index(query, "{")
+	if start < 0 {
+		return nil, fmt.Errorf("query has no selection set: %q", query)
+	}
+
+	selections, rest, err := parseSelectionSet(query[start+1:])
+	if err != nil {
+		return nil, fmt.Errorf("parsing %q: %w", query, err)
+	}
+	if strings.TrimSpace(rest) != "" {
+		return nil, fmt.Errorf("trailing input %q after the selection set of %q", rest, query)
+	}
+
+	return selections, nil
+}
+
+// parseSelectionSet parses fields up to the closing brace of the current set
+// and returns them with the input that follows that brace.
+func parseSelectionSet(in string) ([]selection, string, error) {
+	var out []selection
+	for {
+		in = strings.TrimLeft(in, " ,\n\t")
+		if in == "" {
+			return nil, "", errors.New("unterminated selection set")
+		}
+		if in[0] == '}' {
+			return out, in[1:], nil
+		}
+
+		end := strings.IndexAny(in, " ,:({}")
+		if end <= 0 {
+			return nil, "", fmt.Errorf("expected a field name at %q", in)
+		}
+		sel := selection{key: in[:end], field: in[:end]}
+		in = strings.TrimLeft(in[end:], " ")
+
+		if in != "" && in[0] == ':' {
+			in = strings.TrimLeft(in[1:], " ")
+			end = strings.IndexAny(in, " ,({}")
+			if end <= 0 {
+				return nil, "", fmt.Errorf("expected a field name after the alias %q", sel.key)
+			}
+			sel.field = in[:end]
+			in = strings.TrimLeft(in[end:], " ")
+		}
+
+		if in != "" && in[0] == '(' {
+			end = strings.Index(in, ")")
+			if end < 0 {
+				return nil, "", fmt.Errorf("unterminated argument list for %q", sel.field)
+			}
+			in = strings.TrimLeft(in[end+1:], " ")
+		}
+
+		if in != "" && in[0] == '{' {
+			var err error
+			if sel.children, in, err = parseSelectionSet(in[1:]); err != nil {
+				return nil, "", err
+			}
+		}
+
+		out = append(out, sel)
+	}
+}
+
+// reporter is the part of testing.T the stub reports through. The stub runs on
+// the server's goroutine, where only non-fatal reporting is allowed.
+type reporter interface {
+	Helper()
+	Errorf(format string, args ...any)
+}
+
+// projectFixture narrows a whole-account fixture to exactly what a document
+// selected.
 //
 // Fixtures describe an account, not a query, which keeps them readable and
 // lets one file cover every collector. The GraphQL decoder rejects response
 // fields the query did not select, so the stub does the narrowing a real
-// server does. Errors are passed through unchanged: a fixture that carries an
-// error fails every document, which is what TestCollectorSurfacesQueryErrors
-// relies on.
-func projectFixture(t *testing.T, response string, field string) string {
+// server does, including for collectors that select the same root field with
+// different shapes. A selected field that the fixture lacks fails the test:
+// serving it as absent would let a collector pass on zero values the fixture
+// never meant to provide. Errors are passed through unchanged: a fixture that
+// carries an error fails every document, which is what
+// TestCollectorSurfacesQueryErrors relies on.
+func projectFixture(t reporter, response string, query string) string {
 	t.Helper()
 
 	var envelope struct {
@@ -126,23 +222,85 @@ func projectFixture(t *testing.T, response string, field string) string {
 		return response
 	}
 
-	var projected map[string]json.RawMessage
+	var projected json.RawMessage
 	if envelope.Data != nil {
-		projected = map[string]json.RawMessage{}
-		if value, ok := envelope.Data[field]; ok {
-			projected[field] = value
+		data, err := json.Marshal(envelope.Data)
+		if err != nil {
+			t.Errorf("re-marshalling fixture data: %v", err)
+			return response
 		}
+		selections, err := parseSelections(query)
+		if err != nil {
+			t.Errorf("stub: %v", err)
+			return response
+		}
+		projected = projectValue(t, data, selections, operationOf(query))
 	}
 
 	out, err := json.Marshal(struct {
-		Data   map[string]json.RawMessage `json:"data"`
-		Errors json.RawMessage            `json:"errors,omitempty"`
+		Data   json.RawMessage `json:"data"`
+		Errors json.RawMessage `json:"errors,omitempty"`
 	}{Data: projected, Errors: envelope.Errors})
 	if err != nil {
-		t.Fatalf("re-marshalling projected fixture: %v", err)
+		t.Errorf("re-marshalling projected fixture: %v", err)
+		return response
 	}
 
 	return string(out)
+}
+
+// projectValue applies selections to one fixture value. Lists are projected
+// element by element, and null is a leaf whatever was selected under it.
+func projectValue(t reporter, value json.RawMessage, selections []selection, path string) json.RawMessage {
+	t.Helper()
+
+	trimmed := strings.TrimSpace(string(value))
+	switch {
+	case len(selections) == 0 || trimmed == "null":
+		return value
+
+	case strings.HasPrefix(trimmed, "["):
+		var items []json.RawMessage
+		if err := json.Unmarshal(value, &items); err != nil {
+			t.Errorf("fixture %s: %v", path, err)
+			return value
+		}
+		for i := range items {
+			items[i] = projectValue(t, items[i], selections, path)
+		}
+
+		return mustMarshal(t, items)
+
+	default:
+		var object map[string]json.RawMessage
+		if err := json.Unmarshal(value, &object); err != nil {
+			t.Errorf("fixture %s: selection set on a non-object: %v", path, err)
+			return value
+		}
+
+		out := make(map[string]json.RawMessage, len(selections))
+		for _, sel := range selections {
+			field, ok := object[sel.field]
+			if !ok {
+				t.Errorf("fixture lacks %s.%s, which the document selects", path, sel.field)
+				continue
+			}
+			out[sel.key] = projectValue(t, field, sel.children, path+"."+sel.field)
+		}
+
+		return mustMarshal(t, out)
+	}
+}
+
+func mustMarshal(t reporter, value any) json.RawMessage {
+	t.Helper()
+
+	out, err := json.Marshal(value)
+	if err != nil {
+		t.Errorf("marshalling projected fixture: %v", err)
+	}
+
+	return out
 }
 
 func newGraphQLStub(t *testing.T, response string) *graphqlStub {
@@ -165,21 +323,27 @@ func newGraphQLStub(t *testing.T, response string) *graphqlStub {
 			t.Errorf("unmarshalling stub request body %q: %v", body, err)
 			return
 		}
+		var variables bytes.Buffer
+		if len(envelope.Variables) > 0 && string(envelope.Variables) != "null" {
+			if err := json.Compact(&variables, envelope.Variables); err != nil {
+				t.Errorf("compacting stub request variables %s: %v", envelope.Variables, err)
+			}
+		}
 		stub.mutex.Lock()
 		stub.queries = append(stub.queries, envelope.Query)
 		stub.operationNames = append(stub.operationNames, envelope.OperationName)
+		if stub.variables == nil {
+			stub.variables = map[string]string{}
+		}
+		stub.variables[envelope.OperationName] = variables.String()
 		stub.mutex.Unlock()
 
 		response, overridden := stub.overrides[envelope.OperationName]
 		if !overridden {
-			field, known := operationRootFields[envelope.OperationName]
-			if !known {
-				// Refuse to improvise: serving an empty response here would
-				// let a collector missing from the map pass every test on
-				// all-zero data.
-				t.Errorf("stub received unknown operation %q; add it to operationRootFields", envelope.OperationName)
+			if name := operationOf(envelope.Query); name != envelope.OperationName {
+				t.Errorf("document is named %q but the envelope operationName is %q", name, envelope.OperationName)
 			}
-			response = projectFixture(t, stub.response, field)
+			response = projectFixture(t, stub.response, envelope.Query)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -208,9 +372,34 @@ func (s *graphqlStub) partialCollector(t *testing.T) prometheus.Collector {
 func (s *graphqlStub) collectorWithPartialScrapes(t *testing.T, partialScrapes bool) prometheus.Collector {
 	t.Helper()
 
+	return s.exporter(t, nil, partialScrapes)
+}
+
+// allCollectors builds a real exporter over every collector, the opt-in ones
+// included, with the default (strict) failure policy.
+func (s *graphqlStub) allCollectors(t *testing.T) prometheus.Collector {
+	t.Helper()
+
+	return s.exporter(t, allCollectorsEnabled(), false)
+}
+
+// allCollectorsEnabled is the newCollectors selection that turns every
+// collector on.
+func allCollectorsEnabled() map[string]bool {
+	enabled := make(map[string]bool, len(collectorSpecs))
+	for _, spec := range collectorSpecs {
+		enabled[spec.name] = true
+	}
+
+	return enabled
+}
+
+func (s *graphqlStub) exporter(t *testing.T, enabled map[string]bool, partialScrapes bool) prometheus.Collector {
+	t.Helper()
+
 	ctx := logging.Init(context.Background(), true)
 	exporter, err := newExporter(
-		ctx, s.server.Client(), &fakeSession{endpoint: s.server.URL}, 5*time.Second, newCollectors(nil), partialScrapes)
+		ctx, s.server.Client(), &fakeSession{endpoint: s.server.URL}, 5*time.Second, newCollectors(enabled), partialScrapes)
 	if err != nil {
 		t.Fatalf("newExporter: %v", err)
 	}
@@ -319,4 +508,61 @@ func fixture(t *testing.T, name string) string {
 	}
 
 	return string(body)
+}
+
+func TestParseSelections(t *testing.T) {
+	got, err := parseSelections(`query Op($input:SearchInput!){pools:workerPools{id,search(input: $input, first: 2){edges{node{id}}},n},usage{seats}}`)
+	if err != nil {
+		t.Fatalf("parseSelections: %v", err)
+	}
+
+	want := []selection{
+		{key: "pools", field: "workerPools", children: []selection{
+			{key: "id", field: "id"},
+			{key: "search", field: "search", children: []selection{
+				{key: "edges", field: "edges", children: []selection{
+					{key: "node", field: "node", children: []selection{{key: "id", field: "id"}}},
+				}},
+			}},
+			{key: "n", field: "n"},
+		}},
+		{key: "usage", field: "usage", children: []selection{{key: "seats", field: "seats"}}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("parseSelections =\n%+v\nwant\n%+v", got, want)
+	}
+
+	for _, bad := range []string{`query Op`, `query Op{a{b}`, `query Op{a(x:1{b}}`} {
+		if _, err := parseSelections(bad); err == nil {
+			t.Errorf("parseSelections(%q) succeeded, want an error", bad)
+		}
+	}
+}
+
+// errorRecorder is a reporter that keeps errors instead of failing the test.
+type errorRecorder struct{ errors []string }
+
+func (r *errorRecorder) Helper() {}
+
+func (r *errorRecorder) Errorf(format string, args ...any) {
+	r.errors = append(r.errors, fmt.Sprintf(format, args...))
+}
+
+func TestProjectFixture(t *testing.T) {
+	const fixture = `{"data":{"pools":[{"id":"a","name":"x","workers":[{"busy":true,"id":"w"}]},{"id":"b","name":"y","workers":null}],"other":1}}`
+
+	recorder := &errorRecorder{}
+	got := projectFixture(recorder, fixture, `query Op{pools{id,workers{busy}}}`)
+	if len(recorder.errors) > 0 {
+		t.Fatalf("unexpected errors: %v", recorder.errors)
+	}
+	if want := `{"data":{"pools":[{"id":"a","workers":[{"busy":true}]},{"id":"b","workers":null}]}}`; got != want {
+		t.Errorf("projection = %s, want %s", got, want)
+	}
+
+	recorder = &errorRecorder{}
+	projectFixture(recorder, fixture, `query Op{pools{id,workers{drained}}}`)
+	if len(recorder.errors) != 1 || !strings.Contains(recorder.errors[0], "Op.pools.workers.drained") {
+		t.Errorf("a selected field missing from the fixture reported %v, want one error naming Op.pools.workers.drained", recorder.errors)
+	}
 }

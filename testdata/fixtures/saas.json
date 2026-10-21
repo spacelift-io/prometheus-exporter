@@ -3,7 +3,15 @@
     "publicWorkerPool": {
       "parallelism": 10,
       "busyWorkers": 3,
-      "pendingRuns": 2
+      "pendingRuns": 2,
+      "searchSchedulableRuns": {
+        "edges": [
+          { "node": { "run": { "createdAt": 1752700500, "state": "INITIALIZING", "type": "PROPOSED" } } },
+          { "node": { "run": { "createdAt": 1752700600, "state": "READY", "type": "TRACKED" } } }
+        ],
+        "pageInfo": { "hasNextPage": false }
+      },
+      "searchSchedulableRunsSuggestions": { "filteredCount": 2 }
     },
     "workerPools": [
       {
@@ -12,13 +20,23 @@
         "pendingRuns": 5,
         "busyWorkers": 4,
         "workers": [
-          { "id": "worker-a", "drained": false },
-          { "id": "worker-b", "drained": false },
-          { "id": "worker-c", "drained": false },
-          { "id": "worker-d", "drained": false },
-          { "id": "worker-e", "drained": true },
-          { "id": "worker-f", "drained": true }
-        ]
+          { "id": "worker-a", "drained": false, "busy": true },
+          { "id": "worker-b", "drained": false, "busy": true },
+          { "id": "worker-c", "drained": false, "busy": true },
+          { "id": "worker-d", "drained": false, "busy": false },
+          { "id": "worker-e", "drained": true, "busy": true },
+          { "id": "worker-f", "drained": true, "busy": false }
+        ],
+        "searchSchedulableRuns": {
+          "edges": [
+            { "node": { "run": { "createdAt": 1752700000, "state": "PLANNING", "type": "TRACKED" } } },
+            { "node": { "run": { "createdAt": 1752700100, "state": "READY", "type": "PROPOSED" } } },
+            { "node": { "run": { "createdAt": 1752700200, "state": "READY", "type": "PROPOSED" } } },
+            { "node": { "run": { "createdAt": 1752700300, "state": "READY", "type": "TRACKED" } } }
+          ],
+          "pageInfo": { "hasNextPage": false }
+        },
+        "searchSchedulableRunsSuggestions": { "filteredCount": 750 }
       },
       {
         "id": "01HQZXA1B2C3D4E5F6G7H8J9K0",
@@ -26,10 +44,55 @@
         "pendingRuns": 0,
         "busyWorkers": 1,
         "workers": [
-          { "id": "worker-g", "drained": false },
-          { "id": "worker-h", "drained": false },
-          { "id": "worker-i", "drained": false }
-        ]
+          { "id": "worker-g", "drained": false, "busy": true },
+          { "id": "worker-h", "drained": false, "busy": false },
+          { "id": "worker-i", "drained": false, "busy": false }
+        ],
+        "searchSchedulableRuns": {
+          "edges": [
+            { "node": { "run": { "createdAt": 1752700400, "state": "READY", "type": "TRACKED" } } }
+          ],
+          "pageInfo": { "hasNextPage": false }
+        },
+        "searchSchedulableRunsSuggestions": { "filteredCount": 1 }
+      }
+    ],
+    "stacks": [
+      {
+        "id": "prod-network",
+        "name": "Production network",
+        "space": "root",
+        "state": "FINISHED",
+        "stateSetAt": 1752600000,
+        "isDisabled": false,
+        "lockedBy": null
+      },
+      {
+        "id": "prod-database",
+        "name": "Production database",
+        "space": "production-01HQZXC1B2C3D4E5F6G7H8J9K0",
+        "state": "FAILED",
+        "stateSetAt": 1752610000,
+        "isDisabled": false,
+        "lockedBy": "example-user"
+      },
+      {
+        "id": "staging-app",
+        "name": "Staging app",
+        "space": "staging-01HQZXD1B2C3D4E5F6G7H8J9K0",
+        "state": "UNCONFIRMED",
+        "stateSetAt": 1752620000,
+        "isDisabled": true,
+        "lockedBy": null
+      },
+      {
+        "id": "sandbox-new",
+        "name": "Sandbox (never run)",
+        "space": "root",
+        "state": "NONE",
+        "stateSetAt": null,
+        "isDisabled": false,
+        "lockedBy": null
       }
     ],
     "usage": {
