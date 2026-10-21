@@ -1,0 +1,37 @@
+{
+  "data": {
+    "publicWorkerPool": {
+      "parallelism": 2,
+      "busyWorkers": 0,
+      "pendingRuns": 0,
+      "searchSchedulableRuns": { "edges": [], "pageInfo": { "hasNextPage": false } },
+      "searchSchedulableRunsSuggestions": { "filteredCount": 0 }
+    },
+    "workerPools": [
+      {
+        "id": "01HQZXE1B2C3D4E5F6G7H8J9K0",
+        "name": "first-pool",
+        "pendingRuns": 0,
+        "busyWorkers": 0,
+        "workers": [],
+        "searchSchedulableRuns": { "edges": [], "pageInfo": { "hasNextPage": false } },
+        "searchSchedulableRunsSuggestions": { "filteredCount": 0 }
+      }
+    ],
+    "stacks": [],
+    "usage": {
+      "billingPeriodStart": 1752000000,
+      "billingPeriodEnd": 1754678400,
+      "usedPrivateMinutes": 0,
+      "usedPublicMinutes": 0,
+      "usedSeats": 1
+    },
+    "metrics": {
+      "stacksCountByState": [],
+      "resourcesCountByDrift": [],
+      "avgStackSizeByResourceCount": [],
+      "averageRunDuration": [],
+      "medianRunDuration": []
+    }
+  }
+}
