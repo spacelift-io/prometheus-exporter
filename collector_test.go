@@ -47,9 +47,10 @@ func TestCollectGoldenPartialFailure(t *testing.T) {
 // was declared in Describe but never sent to the metric channel, and
 // spacelift_scrape_duration_seconds was emitted but never described. Both were
 // fixed in #75. A pedantic registry does not catch either case on its own.
+// Every collector is enabled, the opt-in ones included.
 func TestDescribeMatchesCollect(t *testing.T) {
 	stub := newGraphQLStub(t, fixture(t, "saas"))
-	collector := stub.collector(t)
+	collector := stub.allCollectors(t)
 
 	described := make(chan *prometheus.Desc, 256)
 	collector.Describe(described)
@@ -104,11 +105,32 @@ var lintBaseline = map[string]string{
 // This is the gate that stops a large metrics PR from shipping convention bugs
 // that a human reviewer would have to catch by eye.
 func TestCollectLint(t *testing.T) {
-	for _, shape := range []string{"saas", "self-hosted", "empty-account"} {
-		t.Run(shape, func(t *testing.T) {
-			stub := newGraphQLStub(t, fixture(t, shape))
+	for _, test := range []struct {
+		shape string
+		// all enables the opt-in collectors too.
+		all bool
+	}{
+		{shape: "saas"},
+		{shape: "self-hosted"},
+		{shape: "empty-account"},
+		{shape: "saas", all: true},
+		{shape: "self-hosted", all: true},
+		{shape: "new-account", all: true},
+	} {
+		name := test.shape
+		if test.all {
+			name += "-all-collectors"
+		}
 
-			problems, err := testutil.CollectAndLint(stub.collector(t))
+		t.Run(name, func(t *testing.T) {
+			stub := newGraphQLStub(t, fixture(t, test.shape))
+
+			collector := stub.collector(t)
+			if test.all {
+				collector = stub.allCollectors(t)
+			}
+
+			problems, err := testutil.CollectAndLint(collector)
 			if err != nil {
 				t.Fatalf("linting collector output: %v", err)
 			}
@@ -128,7 +150,7 @@ func TestCollectLint(t *testing.T) {
 func TestLintBaselineIsNotStale(t *testing.T) {
 	stub := newGraphQLStub(t, fixture(t, "saas"))
 
-	problems, err := testutil.CollectAndLint(stub.collector(t))
+	problems, err := testutil.CollectAndLint(stub.allCollectors(t))
 	if err != nil {
 		t.Fatalf("linting collector output: %v", err)
 	}
@@ -149,16 +171,20 @@ func TestLintBaselineIsNotStale(t *testing.T) {
 // is expensive for Spacelift to serve for metrics, so the cost of a scrape is
 // part of this exporter's contract: a reviewer should be able to see, from a
 // test diff, that a change adds a field or a round trip.
+//
+// Every collector is enabled, the opt-in ones included. A collector's document
+// does not depend on which other collectors are enabled, so this also pins the
+// default scrape.
 func TestQueryShape(t *testing.T) {
 	stub := newGraphQLStub(t, fixture(t, "saas"))
 
 	metrics := make(chan prometheus.Metric, 256)
-	stub.collector(t).Collect(metrics)
+	stub.allCollectors(t).Collect(metrics)
 	close(metrics)
 	queries, operationNames := stub.recorded()
 
 	// One request per collector, and no more.
-	if got, want := len(queries), len(newCollectors(nil)); got != want {
+	if got, want := len(queries), len(newCollectors(allCollectorsEnabled())); got != want {
 		t.Errorf("a scrape issued %d GraphQL requests, want %d (one per collector)", got, want)
 	}
 
@@ -170,6 +196,8 @@ func TestQueryShape(t *testing.T) {
 		"PrometheusExporter_WorkerPools":      `query PrometheusExporter_WorkerPools{workerPools{id,name,pendingRuns,busyWorkers,workers{id,drained}}}`,
 		"PrometheusExporter_Usage":            `query PrometheusExporter_Usage{usage{billingPeriodStart,billingPeriodEnd,usedPrivateMinutes,usedPublicMinutes,usedSeats}}`,
 		"PrometheusExporter_Aggregates":       `query PrometheusExporter_Aggregates{metrics{stacksCountByState{value,labels},resourcesCountByDrift{value,labels},avgStackSizeByResourceCount{value,labels},averageRunDuration{value,labels},medianRunDuration{value,labels}}}`,
+		"PrometheusExporter_WorkerStatus":     `query PrometheusExporter_WorkerStatus{workerPools{id,name,workers{busy,drained}}}`,
+		"PrometheusExporter_Stacks":           `query PrometheusExporter_Stacks{stacks{id,name,space,state,stateSetAt,isDisabled,lockedBy}}`,
 	}
 
 	seen := map[string]string{}
@@ -185,6 +213,17 @@ func TestQueryShape(t *testing.T) {
 		}
 		if got != want {
 			t.Errorf("%s changed without updating the API-cost contract\nwant: %s\n got: %s", operation, want, got)
+		}
+	}
+
+	// The variables each document sends are part of its cost too, and are not
+	// visible in the document text. A document absent here sends none.
+	expectedVariables := map[string]string{}
+	for operation, sent := range stub.recordedVariables() {
+		for _, got := range sent {
+			if want := expectedVariables[operation]; got != want {
+				t.Errorf("%s sent variables %q, want %q", operation, got, want)
+			}
 		}
 	}
 
@@ -338,6 +377,10 @@ func TestMetricsHandlerPolicy(t *testing.T) {
 	const (
 		internalError = `{"errors":[{"message":"internal error"}]}`
 		gatedError    = `{"errors":[{"message":"not available for machine sessions"}]}`
+		// The shape the live API returns, with HTTP 200, for a document
+		// selecting a field its schema lacks. No default collector declares
+		// a version-gated field, so this reads as a typo.
+		missingField = `{"errors":[{"message":"Cannot query field \"medianRunDurationz\" on type \"Metrics\". Did you mean \"medianRunDuration\"?","locations":[{"line":1,"column":152}]}]}`
 	)
 
 	for _, test := range []struct {
@@ -380,6 +423,22 @@ func TestMetricsHandlerPolicy(t *testing.T) {
 			wantBody: []string{
 				`spacelift_scrape_collector_success{collector="aggregates"} 1`,
 				`spacelift_scrape_collector_supported{collector="aggregates"} 0`,
+			},
+		},
+		{
+			name:       "strict: an undeclared missing field fails the scrape",
+			response:   missingField,
+			wantStatus: http.StatusInternalServerError,
+			wantBody:   []string{"spacelift_error", `aggregates: Message: Cannot query field "medianRunDurationz"`},
+		},
+		{
+			name:           "partial: an undeclared missing field is a failure, not unsupported",
+			partialScrapes: true,
+			response:       missingField,
+			wantStatus:     http.StatusOK,
+			wantBody: []string{
+				`spacelift_scrape_collector_success{collector="aggregates"} 0`,
+				`spacelift_scrape_collector_supported{collector="aggregates"} 1`,
 			},
 		},
 		{

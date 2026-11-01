@@ -1,0 +1,39 @@
+# HELP spacelift_stack_disabled Whether the stack is disabled (1) or not (0)
+# TYPE spacelift_stack_disabled gauge
+spacelift_stack_disabled{stack_id="prod-database"} 0
+spacelift_stack_disabled{stack_id="prod-network"} 0
+spacelift_stack_disabled{stack_id="sandbox"} 0
+spacelift_stack_disabled{stack_id="staging-app"} 1
+# HELP spacelift_stack_info Always 1, with the stack's name and space as labels, to join to the other spacelift_stack_ series of the same target on stack_id
+# TYPE spacelift_stack_info gauge
+spacelift_stack_info{space_id="production-01HQZXC1B2C3D4E5F6G7H8J9K0",stack_id="prod-database",stack_name="Production database"} 1
+spacelift_stack_info{space_id="root",stack_id="prod-network",stack_name="Production network"} 1
+spacelift_stack_info{space_id="root",stack_id="sandbox",stack_name="Sandbox"} 1
+spacelift_stack_info{space_id="staging-01HQZXD1B2C3D4E5F6G7H8J9K0",stack_id="staging-app",stack_name="Staging app"} 1
+# HELP spacelift_stack_locked Whether the stack is locked by a user (1) or not (0)
+# TYPE spacelift_stack_locked gauge
+spacelift_stack_locked{stack_id="prod-database"} 1
+spacelift_stack_locked{stack_id="prod-network"} 0
+spacelift_stack_locked{stack_id="sandbox"} 0
+spacelift_stack_locked{stack_id="staging-app"} 0
+# HELP spacelift_stack_state Always 1, with the stack's current state as the state label
+# TYPE spacelift_stack_state gauge
+spacelift_stack_state{stack_id="prod-database",state="FAILED"} 1
+spacelift_stack_state{stack_id="prod-network",state="FINISHED"} 1
+spacelift_stack_state{stack_id="sandbox",state="NONE"} 1
+spacelift_stack_state{stack_id="staging-app",state="UNCONFIRMED"} 1
+# HELP spacelift_stack_state_set_timestamp_seconds The Unix time at which the stack entered its current state, absent when the API reports no time for the current state
+# TYPE spacelift_stack_state_set_timestamp_seconds gauge
+spacelift_stack_state_set_timestamp_seconds{stack_id="prod-database"} 1.75261e+09
+spacelift_stack_state_set_timestamp_seconds{stack_id="prod-network"} 1.7526e+09
+spacelift_stack_state_set_timestamp_seconds{stack_id="staging-app"} 1.75262e+09
+# HELP spacelift_worker_pool_workers_by_status The number of workers in a worker pool by status: idle, busy, draining (drained and busy) or drained (drained and idle). draining plus drained normally equals spacelift_worker_pool_workers_drained, and busy plus draining normally equals spacelift_worker_pool_workers_busy (each from a separate request)
+# TYPE spacelift_worker_pool_workers_by_status gauge
+spacelift_worker_pool_workers_by_status{status="busy",worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 3
+spacelift_worker_pool_workers_by_status{status="busy",worker_pool_id="01HQZXA1B2C3D4E5F6G7H8J9K0",worker_pool_name="staging"} 1
+spacelift_worker_pool_workers_by_status{status="drained",worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 1
+spacelift_worker_pool_workers_by_status{status="drained",worker_pool_id="01HQZXA1B2C3D4E5F6G7H8J9K0",worker_pool_name="staging"} 0
+spacelift_worker_pool_workers_by_status{status="draining",worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 1
+spacelift_worker_pool_workers_by_status{status="draining",worker_pool_id="01HQZXA1B2C3D4E5F6G7H8J9K0",worker_pool_name="staging"} 0
+spacelift_worker_pool_workers_by_status{status="idle",worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 1
+spacelift_worker_pool_workers_by_status{status="idle",worker_pool_id="01HQZXA1B2C3D4E5F6G7H8J9K0",worker_pool_name="staging"} 2
