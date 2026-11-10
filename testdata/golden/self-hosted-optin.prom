@@ -1,0 +1,21 @@
+# HELP spacelift_stack_disabled Whether the stack is disabled (1) or not (0)
+# TYPE spacelift_stack_disabled gauge
+spacelift_stack_disabled{stack_id="on-prem-cluster"} 0
+# HELP spacelift_stack_info Always 1, with the stack's name and space as labels, to join to the other spacelift_stack_ series of the same target on stack_id
+# TYPE spacelift_stack_info gauge
+spacelift_stack_info{space_id="root",stack_id="on-prem-cluster",stack_name="On-prem cluster"} 1
+# HELP spacelift_stack_locked Whether the stack is locked by a user (1) or not (0)
+# TYPE spacelift_stack_locked gauge
+spacelift_stack_locked{stack_id="on-prem-cluster"} 0
+# HELP spacelift_stack_state Always 1, with the stack's current state as the state label
+# TYPE spacelift_stack_state gauge
+spacelift_stack_state{stack_id="on-prem-cluster",state="FINISHED"} 1
+# HELP spacelift_stack_state_set_timestamp_seconds The Unix time at which the stack entered its current state, absent when the API reports no time for the current state
+# TYPE spacelift_stack_state_set_timestamp_seconds gauge
+spacelift_stack_state_set_timestamp_seconds{stack_id="on-prem-cluster"} 1.75263e+09
+# HELP spacelift_worker_pool_workers_by_status The number of workers in a worker pool by status: idle, busy, draining (drained and busy) or drained (drained and idle). draining plus drained normally equals spacelift_worker_pool_workers_drained, and busy plus draining normally equals spacelift_worker_pool_workers_busy (each from a separate request)
+# TYPE spacelift_worker_pool_workers_by_status gauge
+spacelift_worker_pool_workers_by_status{status="busy",worker_pool_id="01HQZXB1B2C3D4E5F6G7H8J9K0",worker_pool_name="on-prem"} 2
+spacelift_worker_pool_workers_by_status{status="drained",worker_pool_id="01HQZXB1B2C3D4E5F6G7H8J9K0",worker_pool_name="on-prem"} 0
+spacelift_worker_pool_workers_by_status{status="draining",worker_pool_id="01HQZXB1B2C3D4E5F6G7H8J9K0",worker_pool_name="on-prem"} 0
+spacelift_worker_pool_workers_by_status{status="idle",worker_pool_id="01HQZXB1B2C3D4E5F6G7H8J9K0",worker_pool_name="on-prem"} 0

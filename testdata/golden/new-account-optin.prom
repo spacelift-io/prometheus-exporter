@@ -1,0 +1,6 @@
+# HELP spacelift_worker_pool_workers_by_status The number of workers in a worker pool by status: idle, busy, draining (drained and busy) or drained (drained and idle). draining plus drained normally equals spacelift_worker_pool_workers_drained, and busy plus draining normally equals spacelift_worker_pool_workers_busy (each from a separate request)
+# TYPE spacelift_worker_pool_workers_by_status gauge
+spacelift_worker_pool_workers_by_status{status="busy",worker_pool_id="01HQZXE1B2C3D4E5F6G7H8J9K0",worker_pool_name="first-pool"} 0
+spacelift_worker_pool_workers_by_status{status="drained",worker_pool_id="01HQZXE1B2C3D4E5F6G7H8J9K0",worker_pool_name="first-pool"} 0
+spacelift_worker_pool_workers_by_status{status="draining",worker_pool_id="01HQZXE1B2C3D4E5F6G7H8J9K0",worker_pool_name="first-pool"} 0
+spacelift_worker_pool_workers_by_status{status="idle",worker_pool_id="01HQZXE1B2C3D4E5F6G7H8J9K0",worker_pool_name="first-pool"} 0
