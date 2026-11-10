@@ -1,6 +1,6 @@
 module github.com/spacelift-io/prometheus-exporter
 
-go 1.26.0
+go 1.27
 
 require (
 	github.com/hasura/go-graphql-client v0.16.0
