@@ -205,6 +205,52 @@ spacelift_scrape_collector_success == 0
 collector's data at all. It is not a failure, and in partial mode it does not fail the scrape
 while any collector still succeeds.
 
+## Scrape interval and API load
+
+The exporter does not poll on its own: every request to `/metrics` issues one GraphQL request per
+enabled collector, live. API load is therefore set by your scrape configuration:
+
+```text
+requests per day, per collector = 86,400 / scrape interval in seconds x number of scrapers
+```
+
+A scraper is anything that requests `/metrics`: each replica of an HA Prometheus pair, a second
+monitoring agent, or a probe pointed at `/metrics`. One exporter scraped every 15 seconds by an HA
+pair issues 11,520 requests a day per collector; scraped every second, 172,800.
+
+What each collector serves:
+
+| Collector          | Serves                                                                                        |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| `workerpools`      | Per-pool pending runs and worker counts                                                       |
+| `publicworkerpool` | Pending runs, busy workers and parallelism on the public worker pool                          |
+| `usage`            | Billing-period start, end and usage counters                                                  |
+| `aggregates`       | Account-wide stack counts by state, resource drift, average stack size and run-duration stats |
+
+Worker pool and stack-state series change as runs are queued, start and finish. How stale each
+collector can be depends on what you alert or scale on: scrape it as often as its most
+time-sensitive consumer needs, and no more often.
+
+Recommendations:
+
+- **Scrape every 30 to 60 seconds** unless an alert or autoscaler needs fresher data.
+- **If you autoscale workers from these metrics** (for example with KEDA's Prometheus scaler), note
+  that the scaler reads Prometheus, not the exporter, on its own schedule. When it reads, the
+  newest sample can be up to one scrape interval old, so scraping faster lets it see newly queued
+  runs sooner, at the cost of more API load: a tradeoff between sample freshness and load, not a
+  free win. A KEDA `ScaledJob` reads every `pollingInterval`. A `ScaledObject` checks
+  activation every `pollingInterval` but scales through the HPA, which polls every 15 seconds by
+  default. With `useCachedMetrics`, those polls are answered from the value KEDA fetched at the last
+  `pollingInterval`, so Prometheus is queried once per `pollingInterval`.
+- **To scrape worker pools faster than the rest**, run a second exporter with only `workerpools`
+  (and `publicworkerpool`, if you use the public pool) enabled and scrape that one fast, and disable
+  them on the first one (`--no-collector.workerpools`, plus `--no-collector.publicworkerpool` if
+  you moved it). Each series is then exported once, and each scrape of the fast job issues one
+  request per collector enabled on it. Add a `job` matcher to scaler queries as well. A second scrape job against the same exporter does not
+  help: every request to `/metrics` runs every enabled collector.
+- **Point liveness and readiness probes at `/health`**, never at `/metrics`. `/health` answers
+  without querying the Spacelift API.
+
 ## Available Metrics
 
 The following metrics are provided by the exporter:
