@@ -3,6 +3,9 @@ package collector
 import (
 	"context"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/hasura/go-graphql-client"
@@ -82,6 +85,74 @@ func TestClassify(t *testing.T) {
 			// graphql.Errors is a slice, so compare messages, not values.
 			if !test.unsupported && got.Error() != test.err.Error() {
 				t.Errorf("classify(%q) = %v, want the error unchanged", test.err, got)
+			}
+		})
+	}
+}
+
+// endpointSession points the client at a test server with a fixed token.
+type endpointSession string
+
+func (s endpointSession) BearerToken(context.Context) (string, error) { return "token", nil }
+func (s endpointSession) Endpoint() string                            { return string(s) }
+func (s endpointSession) RefreshToken(context.Context) error          { return nil }
+
+// TestClassifyThroughTheClient serves the API's error responses, as the live
+// API sends them (HTTP 200, a GraphQL errors envelope), through the real
+// client, so classify sees the error the GraphQL library actually builds from
+// the wire rather than one assembled by hand. The messages come from the API's
+// schema validation, not from the library, but classification relies on the
+// library keeping each message in the error it returns. A library change that
+// drops or rewrites them fails here.
+func TestClassifyThroughTheClient(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		collector   Collector
+		body        string
+		unsupported bool
+	}{
+		{
+			name:        "declared field missing",
+			collector:   gatedCollector{},
+			body:        `{"errors":[{"message":"Cannot query field \"searchSchedulableRuns\" on type \"WorkerPool\".","locations":[{"line":1,"column":60}]}]}`,
+			unsupported: true,
+		},
+		{
+			name:      "undeclared field missing, suggesting declared ones",
+			collector: gatedCollector{},
+			body:      `{"errors":[{"message":"Cannot query field \"searchSchedulableRunz\" on type \"WorkerPool\". Did you mean \"searchSchedulableRuns\", or \"searchSchedulableRunsSuggestions\"?","locations":[{"line":1,"column":60}]}]}`,
+		},
+		{
+			name:        "machine session",
+			collector:   plainCollector{},
+			body:        `{"errors":[{"message":"not available for machine sessions"}]}`,
+			unsupported: true,
+		},
+		{
+			name:      "genuine failure",
+			collector: gatedCollector{},
+			body:      `{"errors":[{"message":"internal error"}]}`,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, test.body)
+			}))
+			t.Cleanup(server.Close)
+
+			var query struct {
+				Viewer struct {
+					ID string `graphql:"id"`
+				} `graphql:"viewer"`
+			}
+			err := client.New(server.Client(), endpointSession(server.URL)).Query(context.Background(), &query, nil)
+			if err == nil {
+				t.Fatal("the client returned no error for an errors-only response")
+			}
+
+			if got := classify(test.collector, err); errors.Is(got, ErrNotSupported) != test.unsupported {
+				t.Errorf("classify(%q) unsupported = %t, want %t", err, !test.unsupported, test.unsupported)
 			}
 		})
 	}
