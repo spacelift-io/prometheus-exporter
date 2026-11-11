@@ -67,7 +67,7 @@ func classify(c Collector, err error) error {
 	}
 
 	if unsupported {
-		return fmt.Errorf("%w: %v", ErrNotSupported, err)
+		return fmt.Errorf("%w: %w", ErrNotSupported, err)
 	}
 
 	return err

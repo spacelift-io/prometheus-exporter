@@ -91,6 +91,12 @@ func TestClassify(t *testing.T) {
 			if !test.unsupported && got.Error() != test.err.Error() {
 				t.Errorf("classify(%q) = %v, want the error unchanged", test.err, got)
 			}
+			// An unsupported error still carries the API's errors, for
+			// callers that inspect them.
+			var apiErrs graphql.Errors
+			if test.unsupported && !errors.As(got, &apiErrs) {
+				t.Errorf("classify(%q) = %v, want graphql.Errors kept in the chain", test.err, got)
+			}
 		})
 	}
 }
