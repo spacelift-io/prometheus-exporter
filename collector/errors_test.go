@@ -68,6 +68,11 @@ func TestClassify(t *testing.T) {
 		{name: "declared and undeclared fields missing", collector: gatedCollector{}, err: apiErrors(gatedRuns, liveRootField)},
 		{name: "declared field missing beside another validation error", collector: gatedCollector{}, err: apiErrors(gatedRuns, `Unknown type "SearchInput".`), unsupported: true},
 		{name: "collector declaring no fields", collector: plainCollector{}, err: apiErrors(gatedRuns)},
+		// A missing field decides on its own: a machine-session message in
+		// the same error neither hides an undeclared field nor stops a
+		// declared one reading as unsupported.
+		{name: "machine session beside an undeclared missing field", collector: gatedCollector{}, err: apiErrors("not available for machine sessions", liveTypo)},
+		{name: "machine session beside a declared missing field", collector: gatedCollector{}, err: apiErrors("not available for machine sessions", gatedRuns), unsupported: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			got := classify(test.collector, test.err)

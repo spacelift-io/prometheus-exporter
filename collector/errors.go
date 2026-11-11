@@ -17,8 +17,9 @@ var ErrNotSupported = errors.New("not supported on this Spacelift deployment")
 // VersionGated is implemented by a collector whose document selects fields
 // that an older backend's schema may lack. When every field the API reports
 // missing is named here, the collector reports unsupported rather than failed;
-// other validation messages in the same response do not change that. Any
-// other missing field, such as a typo, stays a failure.
+// other messages in the same response, validation or machine-session, do not
+// change that. Any other missing field, such as a typo, stays a failure, even
+// beside a machine-session message.
 type VersionGated interface {
 	// VersionGatedFields returns the names of those fields.
 	VersionGatedFields() []string
@@ -45,7 +46,9 @@ var missingField = regexp.MustCompile(missingFieldError + ` "([^"]+)"`)
 // classify marks an API error as ErrNotSupported when the data is simply
 // unavailable to this session or deployment, and leaves genuine failures
 // alone. A missing field counts as unavailable only when c declares it through
-// VersionGated, and every missing field the error names must be declared. The
+// VersionGated, and every missing field the error names must be declared. An
+// error that names any missing field is judged on those fields alone, so a
+// machine-session message beside an undeclared one cannot hide it. The
 // original error is kept in the chain: it is the only place the API's own
 // message survives, and the strict-mode failure body and the logs would
 // otherwise report a bare sentinel.
@@ -55,7 +58,15 @@ func classify(c Collector, err error) error {
 	}
 
 	message := err.Error()
-	if strings.Contains(message, machineSessionError) || versionGated(c, message) {
+
+	var unsupported bool
+	if missingField.MatchString(message) {
+		unsupported = versionGated(c, message)
+	} else {
+		unsupported = strings.Contains(message, machineSessionError)
+	}
+
+	if unsupported {
 		return fmt.Errorf("%w: %v", ErrNotSupported, err)
 	}
 
