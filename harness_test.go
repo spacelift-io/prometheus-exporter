@@ -429,8 +429,8 @@ func newGraphQLStub(t *testing.T, response string) *graphqlStub {
 	return stub
 }
 
-// collector builds a real exporter over every collector, wired to the stub,
-// with the default (strict) failure policy.
+// collector builds a real exporter over the default collector set, wired to
+// the stub, with the default (strict) failure policy.
 func (s *graphqlStub) collector(t *testing.T) prometheus.Collector {
 	t.Helper()
 
@@ -448,6 +448,25 @@ func (s *graphqlStub) collectorWithPartialScrapes(t *testing.T, partialScrapes b
 	t.Helper()
 
 	return s.exporter(t, nil, partialScrapes)
+}
+
+// allCollectors builds a real exporter over every collector, the opt-in ones
+// included, with the default (strict) failure policy.
+func (s *graphqlStub) allCollectors(t *testing.T) prometheus.Collector {
+	t.Helper()
+
+	return s.exporter(t, allCollectorsEnabled(), false)
+}
+
+// allCollectorsEnabled is the newCollectors selection that turns every
+// collector on.
+func allCollectorsEnabled() map[string]bool {
+	enabled := make(map[string]bool, len(collectorSpecs))
+	for _, spec := range collectorSpecs {
+		enabled[spec.name] = true
+	}
+
+	return enabled
 }
 
 func (s *graphqlStub) exporter(t *testing.T, enabled map[string]bool, partialScrapes bool) prometheus.Collector {

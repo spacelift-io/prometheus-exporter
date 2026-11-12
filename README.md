@@ -171,6 +171,7 @@ OPTIONS:
    --[no-]collector.workerpools      Enable the workerpools collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_WORKERPOOLS]
    --[no-]collector.usage            Enable the usage collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_USAGE]
    --[no-]collector.aggregates       Enable the aggregates collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_AGGREGATES]
+   --[no-]collector.workerstatus     Enable the workerstatus collector (default: false) [$SPACELIFT_PROMEX_COLLECTOR_WORKERSTATUS]
 ```
 
 ## Version
@@ -184,10 +185,11 @@ spacelift-promex version 0.0.1
 
 ## Scrape failures
 
-Each scrape issues one GraphQL request per enabled collector (`publicworkerpool`, `workerpools`,
-`usage`, `aggregates`), concurrently, within one `--scrape-timeout` deadline. Disable a collector with
-`--no-collector.<name>` or `SPACELIFT_PROMEX_COLLECTOR_<NAME>=false`; a disabled collector issues
-no request and emits no series.
+Each scrape issues one GraphQL request per enabled collector, concurrently, within one
+`--scrape-timeout` deadline. `publicworkerpool`, `workerpools`, `usage` and `aggregates` are on by
+default; the [opt-in collectors](#opt-in-collectors) are off. Enable or disable a collector with
+`--[no-]collector.<name>` or `SPACELIFT_PROMEX_COLLECTOR_<NAME>=true|false`; a disabled collector
+issues no request and emits no series.
 
 By default, an error from any collector fails the whole scrape: `/metrics` returns HTTP 500 and
 Prometheus records the target as down, so existing `up == 0` alerts keep working. The response body
@@ -230,6 +232,7 @@ What each collector serves:
 | `publicworkerpool` | Pending runs, busy workers and parallelism on the public worker pool                          |
 | `usage`            | Billing-period start, end and usage counters                                                  |
 | `aggregates`       | Account-wide stack counts by state, resource drift, average stack size and run-duration stats |
+| `workerstatus`     | Opt-in: per-pool worker counts by status, listing every worker again                          |
 
 Worker pool and stack-state series change as runs are queued, start and finish. How stale each
 collector can be depends on what you alert or scale on: scrape it as often as its most
@@ -283,6 +286,39 @@ The following metrics are provided by the exporter:
 | `spacelift_scrape_collector_duration_seconds`              | `collector`                          | The duration in seconds of the collector's request to the Spacelift API on the last scrape     |
 | `spacelift_scrape_duration_seconds`                        |                                      | The duration in seconds of the request to the Spacelift API for metrics (the whole scrape; collectors query concurrently) |
 | `spacelift_build_info`                                     |                                      | Contains build information about the exporter (version, commit, etc)                           |
+
+## Opt-in collectors
+
+These collectors are off by default, so adding one to the exporter changes neither the documents
+nor the series of the default scrape. Each one adds requests to every scrape, as the table below
+lists. Enable them one at a time and watch
+`spacelift_scrape_collector_duration_seconds{collector="<name>"}` and the series count.
+
+| Collector      | Flag                       | Cost per scrape                                                                                                        |
+| -------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `workerstatus` | `--collector.workerstatus` | A second `workerPools` request that lists every worker of every pool, as `workerpools` does; 4 series per private pool |
+
+Run opt-in collectors with `--partial-scrapes`. Every collector shares one `--scrape-timeout`
+deadline, and in the default strict mode one collector that fails or runs out of time fails the
+whole scrape, taking the default metrics down with it. With partial scrapes it costs only its own
+series, and `spacelift_scrape_collector_success{collector="<name>"}` says so.
+
+| Metric                                    | Collector      | Labels                                         | Description                                                                                      |
+| ----------------------------------------- | -------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `spacelift_worker_pool_workers_by_status` | `workerstatus` | `worker_pool_id`, `worker_pool_name`, `status` | Workers by status: `idle`, `busy`, `draining` (drained and busy) or `drained` (drained and idle) |
+
+`spacelift_worker_pool_workers_by_status` breaks the default pool series down by status.
+`draining` plus `drained` normally equals `spacelift_worker_pool_workers_drained`, and the four
+statuses normally sum to `spacelift_worker_pool_workers`. The two collectors send separate
+requests, so a worker that registers or changes state between them can make these differ for a
+scrape. `busy` plus `draining` equals `spacelift_worker_pool_workers_busy` when the API's
+`busyWorkers` count matches the workers' `busy` flags: that series comes from the pool's
+`busyWorkers` field and not from the worker list.
+
+```promql
+# Pools with drained workers that are still finishing a run
+spacelift_worker_pool_workers_by_status{status="draining"} > 0
+```
 
 ## Example Dashboard
 
