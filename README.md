@@ -235,13 +235,22 @@ Recommendations:
 
 - **Scrape every 30 to 60 seconds** unless an alert or autoscaler needs fresher data.
 - **If you autoscale workers from these metrics** (for example with KEDA's Prometheus scaler), note
-  that the scaler reads Prometheus, not the exporter, on its own schedule. When it reads, the
-  newest sample can be up to one scrape interval old, so scraping faster lets it see newly queued
-  runs sooner, at the cost of more API load: a tradeoff between sample freshness and load, not a
-  free win. A KEDA `ScaledJob` reads every `pollingInterval`. A `ScaledObject` checks
+  that the scaler reads Prometheus, not the exporter, on its own schedule. While scrapes succeed,
+  the newest sample it reads can be up to one scrape interval old, so scraping faster lets it see
+  newly queued runs sooner, at the cost of more API load: a tradeoff between sample freshness and
+  load, not a free win. A KEDA `ScaledJob` reads every `pollingInterval`. A `ScaledObject` checks
   activation every `pollingInterval` but scales through the HPA, which polls every 15 seconds by
   default. With `useCachedMetrics`, those polls are answered from the value KEDA fetched at the last
   `pollingInterval`, so Prometheus is queried once per `pollingInterval`.
+- **Decide what the scaler does when a scrape fails.** A failed scrape leaves the scaler's query
+  with no series: by default any collector error fails the whole scrape with HTTP 500, and with
+  `--partial-scrapes` only the failed collector's series drop out. KEDA's Prometheus scaler reads an
+  empty result as 0 by default (`ignoreNullValues` defaults to `true`), so a failure that lasts can
+  scale workers down while runs are still queued. Set `ignoreNullValues: "false"` to make an empty
+  result a scaler error, and on a `ScaledObject` set `fallback` to hold a replica count while the
+  scaler fails. A `ScaledJob` does not support `fallback`. Both depend on the query returning no
+  series when the metric is missing: a default such as `or vector(0)` turns a failed scrape back
+  into 0.
 - **To scrape worker pools faster than the rest**, run a second exporter with only `workerpools`
   (and `publicworkerpool`, if you use the public pool) enabled and scrape that one fast, and disable
   them on the first one (`--no-collector.workerpools`, plus `--no-collector.publicworkerpool` if
