@@ -248,7 +248,9 @@ Recommendations:
   empty result as 0 by default (`ignoreNullValues` defaults to `true`), so a failure that lasts can
   scale workers down while runs are still queued. Set `ignoreNullValues: "false"` to make an empty
   result a scaler error, and on a `ScaledObject` set `fallback` to hold a replica count while the
-  scaler fails. A `ScaledJob` does not support `fallback`.
+  scaler fails. A `ScaledJob` does not support `fallback`. Both depend on the query returning no
+  series when the metric is missing: a default such as `or vector(0)` turns a failed scrape back
+  into 0.
 - **To scrape worker pools faster than the rest**, run a second exporter with only `workerpools`
   (and `publicworkerpool`, if you use the public pool) enabled and scrape that one fast, and disable
   them on the first one (`--no-collector.workerpools`, plus `--no-collector.publicworkerpool` if
