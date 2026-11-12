@@ -243,6 +243,14 @@ func projectFixture(t reporter, response string, query string) string {
 		t.Errorf("fixture is not a GraphQL envelope: %v", err)
 		return response
 	}
+	// The decoder below matches keys case-insensitively, so "Errors" would
+	// fill the same field as "errors". Check the exact names first.
+	for key := range keys {
+		if key != "data" && key != "errors" && key != "extensions" {
+			t.Errorf("fixture is not a GraphQL envelope: unexpected top-level key %q", key)
+			return response
+		}
+	}
 
 	var envelope struct {
 		Data       map[string]json.RawMessage `json:"data"`
@@ -692,6 +700,8 @@ func TestProjectFixture(t *testing.T) {
 		`{"errors":null}`,
 		`{"data":{"pools":[]},"errors":[]}`,
 		`{"errors":{"message":"boom"}}`,
+		`{"Errors":[{"message":"boom"}]}`,
+		`{"errors":[{"message":"boom"}],"Errors":[]}`,
 	} {
 		recorder = &errorRecorder{}
 		projectFixture(recorder, broken, `query Op{pools{id}}`)
