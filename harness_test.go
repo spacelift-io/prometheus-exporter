@@ -232,8 +232,9 @@ type reporter interface {
 // an error fails every document, which is what
 // TestCollectorSurfacesQueryErrors relies on. A fixture that is not a GraphQL
 // envelope fails the test: malformed JSON, a top-level key other than data,
-// errors and extensions, or neither data nor errors. failOperation serves a
-// malformed body when a test needs one.
+// errors and extensions, neither data nor errors, or an errors key that is not
+// a non-empty list. failOperation serves a malformed body when a test needs
+// one.
 func projectFixture(t reporter, response string, query string) string {
 	t.Helper()
 
@@ -241,6 +242,14 @@ func projectFixture(t reporter, response string, query string) string {
 	if err := json.Unmarshal([]byte(response), &keys); err != nil {
 		t.Errorf("fixture is not a GraphQL envelope: %v", err)
 		return response
+	}
+	// The decoder below matches keys case-insensitively, so "Errors" would
+	// fill the same field as "errors". Check the exact names first.
+	for key := range keys {
+		if key != "data" && key != "errors" && key != "extensions" {
+			t.Errorf("fixture is not a GraphQL envelope: unexpected top-level key %q", key)
+			return response
+		}
 	}
 
 	var envelope struct {
@@ -260,6 +269,13 @@ func projectFixture(t reporter, response string, query string) string {
 	if !hasData && !hasErrors {
 		t.Errorf("fixture is not a GraphQL envelope: it holds neither data nor errors")
 		return response
+	}
+	if hasErrors {
+		var list []json.RawMessage
+		if err := json.Unmarshal(keys["errors"], &list); err != nil || len(list) == 0 {
+			t.Errorf("fixture is not a GraphQL envelope: errors must be a non-empty list, got %s", keys["errors"])
+			return response
+		}
 	}
 
 	var projected json.RawMessage
@@ -680,6 +696,12 @@ func TestProjectFixture(t *testing.T) {
 		`{}`,
 		`{"dat":{}}`,
 		`{"data":{},"error":[]}`,
+		`{"errors":[]}`,
+		`{"errors":null}`,
+		`{"data":{"pools":[]},"errors":[]}`,
+		`{"errors":{"message":"boom"}}`,
+		`{"Errors":[{"message":"boom"}]}`,
+		`{"errors":[{"message":"boom"}],"Errors":[]}`,
 	} {
 		recorder = &errorRecorder{}
 		projectFixture(recorder, broken, `query Op{pools{id}}`)
