@@ -348,6 +348,10 @@ func TestMetricsHandlerPolicy(t *testing.T) {
 	const (
 		internalError = `{"errors":[{"message":"internal error"}]}`
 		gatedError    = `{"errors":[{"message":"not available for machine sessions"}]}`
+		// The shape the live API returns, with HTTP 200, for a document
+		// selecting a field its schema lacks. No default collector declares
+		// a version-gated field, so this reads as a typo.
+		missingField = `{"errors":[{"message":"Cannot query field \"medianRunDurationz\" on type \"Metrics\". Did you mean \"medianRunDuration\"?","locations":[{"line":1,"column":152}]}]}`
 	)
 
 	for _, test := range []struct {
@@ -390,6 +394,22 @@ func TestMetricsHandlerPolicy(t *testing.T) {
 			wantBody: []string{
 				`spacelift_scrape_collector_success{collector="aggregates"} 1`,
 				`spacelift_scrape_collector_supported{collector="aggregates"} 0`,
+			},
+		},
+		{
+			name:       "strict: an undeclared missing field fails the scrape",
+			response:   missingField,
+			wantStatus: http.StatusInternalServerError,
+			wantBody:   []string{"spacelift_error", `aggregates: Message: Cannot query field "medianRunDurationz"`},
+		},
+		{
+			name:           "partial: an undeclared missing field is a failure, not unsupported",
+			partialScrapes: true,
+			response:       missingField,
+			wantStatus:     http.StatusOK,
+			wantBody: []string{
+				`spacelift_scrape_collector_success{collector="aggregates"} 0`,
+				`spacelift_scrape_collector_supported{collector="aggregates"} 1`,
 			},
 		},
 		{

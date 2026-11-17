@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -175,12 +176,18 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 			e.collectorDuration, prometheus.GaugeValue, result.duration.Seconds(), c.Name())
 
 		success, supported := 1.0, 1.0
-		switch err := classify(result.err); {
+		switch err := classify(c, result.err); {
 		case errors.Is(err, ErrNotSupported):
 			supported = 0
 			log := e.logger.Debugw
-			if !e.partialScrapes {
+			switch {
+			case !e.partialScrapes:
 				log = e.logger.Errorw
+			case strings.Contains(err.Error(), missingFieldError):
+				// A missing field is logged above debug level in partial
+				// mode too, so the API's message naming it reaches a
+				// production log.
+				log = e.logger.Warnw
 			}
 			log("Collector is not supported on this deployment", "collector", c.Name(), zap.Error(err))
 			issues = append(issues, fmt.Errorf("%s: %w", c.Name(), err))
