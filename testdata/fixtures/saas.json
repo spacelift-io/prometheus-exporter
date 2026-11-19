@@ -12,12 +12,12 @@
         "pendingRuns": 5,
         "busyWorkers": 4,
         "workers": [
-          { "id": "worker-a", "drained": false },
-          { "id": "worker-b", "drained": false },
-          { "id": "worker-c", "drained": false },
-          { "id": "worker-d", "drained": false },
-          { "id": "worker-e", "drained": true },
-          { "id": "worker-f", "drained": true }
+          { "id": "worker-a", "drained": false, "busy": true },
+          { "id": "worker-b", "drained": false, "busy": true },
+          { "id": "worker-c", "drained": false, "busy": true },
+          { "id": "worker-d", "drained": false, "busy": false },
+          { "id": "worker-e", "drained": true, "busy": true },
+          { "id": "worker-f", "drained": true, "busy": false }
         ]
       },
       {
@@ -26,9 +26,9 @@
         "pendingRuns": 0,
         "busyWorkers": 1,
         "workers": [
-          { "id": "worker-g", "drained": false },
-          { "id": "worker-h", "drained": false },
-          { "id": "worker-i", "drained": false }
+          { "id": "worker-g", "drained": false, "busy": true },
+          { "id": "worker-h", "drained": false, "busy": false },
+          { "id": "worker-i", "drained": false, "busy": false }
         ]
       }
     ],
