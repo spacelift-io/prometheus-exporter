@@ -23,6 +23,8 @@ type collectorSpec struct {
 // requested on each scrape, which is also the order of their flags in --help.
 // A collector whose data exists only on some deployments or tiers should be
 // off by default, so that the others do not report it as unsupported forever.
+// A collector that adds significant API cost, such as another request listing
+// every worker, should also be off by default, so that enabling it is a choice.
 var collectorSpecs = []collectorSpec{
 	{name: "publicworkerpool", defaultEnabled: true, build: collector.NewPublicWorkerPool},
 	{name: "workerpools", defaultEnabled: true, build: collector.NewWorkerPools},
@@ -42,6 +44,20 @@ func newCollectors(enabled map[string]bool) []collector.Collector {
 		}
 		if on {
 			out = append(out, spec.build())
+		}
+	}
+
+	return out
+}
+
+// enabledOptIn returns, in collectorSpecs order, the names of the collectors
+// that are off by default but enabled, so that startup can warn when they run
+// without partial scrapes.
+func enabledOptIn(enabled map[string]bool) []string {
+	var out []string
+	for _, spec := range collectorSpecs {
+		if !spec.defaultEnabled && enabled[spec.name] {
+			out = append(out, spec.name)
 		}
 	}
 

@@ -54,6 +54,28 @@ func TestNewCollectorsHonoursDefaultsAndOverrides(t *testing.T) {
 	}
 }
 
+// TestEnabledOptIn pins which collectors the startup warning about running
+// opt-in collectors without --partial-scrapes names.
+func TestEnabledOptIn(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		enabled map[string]bool
+		want    []string
+	}{
+		{name: "defaults"},
+		{name: "opt-in enabled", enabled: map[string]bool{"workerstatus": true}, want: []string{"workerstatus"}},
+		{name: "opt-in disabled", enabled: map[string]bool{"workerstatus": false}},
+		{name: "default collector only", enabled: map[string]bool{"usage": true}},
+		{name: "every collector", enabled: allCollectorsEnabled(), want: []string{"workerstatus"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := enabledOptIn(test.enabled); !slices.Equal(got, test.want) {
+				t.Fatalf("enabledOptIn = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
 // TestCollectorFlagsDisableCollectors runs the real flag set through urfave/cli
 // so the node_exporter idiom (--collector.<name> / --no-collector.<name>) and
 // its environment variable both reach newCollectors as intended.

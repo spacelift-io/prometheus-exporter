@@ -9,13 +9,15 @@ import (
 )
 
 // Worker statuses, derived from each worker's busy and drained flags, so that
-// a drained worker still finishing a run (draining) is counted apart from a
-// drained idle one.
+// a drained worker still finishing a run (drained_busy) is counted apart from
+// a drained idle one (drained_idle). Both drained statuses carry the prefix so
+// that neither reads as the whole of spacelift_worker_pool_workers_drained,
+// which is their sum.
 const (
-	workerStatusIdle     = "idle"
-	workerStatusBusy     = "busy"
-	workerStatusDraining = "draining"
-	workerStatusDrained  = "drained"
+	workerStatusIdle        = "idle"
+	workerStatusBusy        = "busy"
+	workerStatusDrainedIdle = "drained_idle"
+	workerStatusDrainedBusy = "drained_busy"
 )
 
 // workerStatuses is every status, in the order they are emitted. Each is
@@ -23,15 +25,15 @@ const (
 // worker count. spacelift_worker_pool_workers comes from a separate request,
 // so a worker registering or changing state between the two can make them
 // differ for a scrape.
-var workerStatuses = []string{workerStatusIdle, workerStatusBusy, workerStatusDraining, workerStatusDrained}
+var workerStatuses = []string{workerStatusIdle, workerStatusBusy, workerStatusDrainedIdle, workerStatusDrainedBusy}
 
 // workerStatus buckets a worker by its two flags.
 func workerStatus(busy, drained bool) string {
 	switch {
 	case drained && busy:
-		return workerStatusDraining
+		return workerStatusDrainedBusy
 	case drained:
-		return workerStatusDrained
+		return workerStatusDrainedIdle
 	case busy:
 		return workerStatusBusy
 	default:
@@ -52,10 +54,7 @@ func NewWorkerStatus() Collector {
 	return &workerStatusCollector{
 		workersByStatus: prometheus.NewDesc(
 			"spacelift_worker_pool_workers_by_status",
-			"The number of workers in a worker pool by status: idle, busy, draining (drained and busy) or drained (drained and idle). "+
-				"draining plus drained normally equals spacelift_worker_pool_workers_drained (each from a separate request). "+
-				"busy plus draining equals spacelift_worker_pool_workers_busy when the API's busyWorkers count matches the workers' busy flags: "+
-				"that series comes from the pool's busyWorkers field and not from the worker list",
+			"The number of workers in a worker pool by status: idle, busy, drained_idle or drained_busy",
 			[]string{"worker_pool_id", "worker_pool_name", "status"},
 			nil),
 	}

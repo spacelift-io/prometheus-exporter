@@ -301,23 +301,29 @@ lists. Enable them one at a time and watch
 Run opt-in collectors with `--partial-scrapes`. Every collector shares one `--scrape-timeout`
 deadline, and in the default strict mode one collector that fails or runs out of time fails the
 whole scrape, taking the default metrics down with it. With partial scrapes it costs only its own
-series, and `spacelift_scrape_collector_success{collector="<name>"}` says so.
+series, and `spacelift_scrape_collector_success{collector="<name>"}` says so. The exporter logs a
+warning at startup when an opt-in collector is enabled without `--partial-scrapes`.
 
-| Metric                                    | Collector      | Labels                                         | Description                                                                                      |
-| ----------------------------------------- | -------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `spacelift_worker_pool_workers_by_status` | `workerstatus` | `worker_pool_id`, `worker_pool_name`, `status` | Workers by status: `idle`, `busy`, `draining` (drained and busy) or `drained` (drained and idle) |
+| Metric                                    | Collector      | Labels                                         | Description                                                                                               |
+| ----------------------------------------- | -------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `spacelift_worker_pool_workers_by_status` | `workerstatus` | `worker_pool_id`, `worker_pool_name`, `status` | Workers by status: `idle`, `busy`, `drained_idle` (drained and idle) or `drained_busy` (drained and busy) |
 
-`spacelift_worker_pool_workers_by_status` breaks the default pool series down by status.
-`draining` plus `drained` normally equals `spacelift_worker_pool_workers_drained`, and the four
-statuses normally sum to `spacelift_worker_pool_workers`. The two collectors send separate
-requests, so a worker that registers or changes state between them can make these differ for a
-scrape. `busy` plus `draining` equals `spacelift_worker_pool_workers_busy` when the API's
-`busyWorkers` count matches the workers' `busy` flags: that series comes from the pool's
-`busyWorkers` field and not from the worker list.
+`spacelift_worker_pool_workers_by_status` breaks the default pool series down by status. Both
+drained statuses carry the `drained_` prefix because `spacelift_worker_pool_workers_drained`
+counts every drained worker, idle or busy. `drained_idle` plus `drained_busy` normally equals
+`spacelift_worker_pool_workers_drained`, and the four statuses normally sum to
+`spacelift_worker_pool_workers`. The two collectors send separate requests, so a worker that
+registers or changes state between them can make these differ for a scrape. `busy` plus
+`drained_busy` equals `spacelift_worker_pool_workers_busy` when the API's `busyWorkers` count
+matches the workers' `busy` flags: that series comes from the pool's `busyWorkers` field and not
+from the worker list.
+
+The collector does not declare `Worker.busy` as version gated, so a backend whose schema lacks it
+reports the collector as failed rather than unsupported.
 
 ```promql
 # Pools with drained workers that are still finishing a run
-spacelift_worker_pool_workers_by_status{status="draining"} > 0
+spacelift_worker_pool_workers_by_status{status="drained_busy"} > 0
 ```
 
 ## Example Dashboard

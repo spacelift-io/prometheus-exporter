@@ -65,7 +65,7 @@ func TestNewAccountAllCollectors(t *testing.T) {
 		`spacelift_worker_pool_workers_busy{` + pool + `} 0`,
 		`spacelift_worker_pool_workers_drained{` + pool + `} 0`,
 	}
-	for _, status := range []string{"busy", "drained", "draining", "idle"} {
+	for _, status := range []string{"busy", "drained_busy", "drained_idle", "idle"} {
 		present = append(present, `spacelift_worker_pool_workers_by_status{status="`+status+`",`+pool+`} 0`)
 	}
 	for _, line := range present {
@@ -86,8 +86,9 @@ func TestNewAccountAllCollectors(t *testing.T) {
 
 // TestWorkerStatusMatchesWorkerPools pins how the status breakdown relates to
 // the default pool series, for every pool in every shape. The fixtures answer
-// both requests with the same workers, so draining plus drained equals
-// spacelift_worker_pool_workers_drained, and busy plus draining equals
+// both requests with the same workers, so the four statuses sum to
+// spacelift_worker_pool_workers, drained_idle plus drained_busy equals
+// spacelift_worker_pool_workers_drained, and busy plus drained_busy equals
 // spacelift_worker_pool_workers_busy when the API's busyWorkers count agrees
 // with the workers' busy flags, as it does in every fixture.
 func TestWorkerStatusMatchesWorkerPools(t *testing.T) {
@@ -96,11 +97,20 @@ func TestWorkerStatusMatchesWorkerPools(t *testing.T) {
 			stub := newGraphQLStub(t, fixture(t, shape))
 			output := gather(t, stub.allCollectors(t))
 
+			// A label value may hold spaces, such as a pool name, so the
+			// value is what follows the last space.
 			values := map[string]float64{}
 			for line := range strings.Lines(output) {
-				series, value, _ := strings.Cut(strings.TrimSpace(line), " ")
-				if number, err := strconv.ParseFloat(value, 64); err == nil {
-					values[series] = number
+				line = strings.TrimSpace(line)
+				if strings.HasPrefix(line, "#") {
+					continue
+				}
+				i := strings.LastIndex(line, " ")
+				if i < 0 {
+					continue
+				}
+				if number, err := strconv.ParseFloat(line[i+1:], 64); err == nil {
+					values[line[:i]] = number
 				}
 			}
 
@@ -119,11 +129,21 @@ func TestWorkerStatusMatchesWorkerPools(t *testing.T) {
 					}
 					return values[series]
 				}
-				if got := status("draining") + status("drained"); got != drained {
-					t.Errorf("draining + drained = %v, want spacelift_worker_pool_workers_drained{%s = %v", got, pool, drained)
+				pick := func(name string) float64 {
+					series := name + "{" + pool
+					if _, ok := values[series]; !ok {
+						t.Errorf("missing %s", series)
+					}
+					return values[series]
 				}
-				if got, want := status("busy")+status("draining"), values["spacelift_worker_pool_workers_busy{"+pool]; got != want {
-					t.Errorf("busy + draining = %v, want spacelift_worker_pool_workers_busy{%s = %v", got, pool, want)
+				if got := status("drained_idle") + status("drained_busy"); got != drained {
+					t.Errorf("drained_idle + drained_busy = %v, want spacelift_worker_pool_workers_drained{%s = %v", got, pool, drained)
+				}
+				if got, want := status("busy")+status("drained_busy"), pick("spacelift_worker_pool_workers_busy"); got != want {
+					t.Errorf("busy + drained_busy = %v, want spacelift_worker_pool_workers_busy{%s = %v", got, pool, want)
+				}
+				if got, want := status("idle")+status("busy")+status("drained_idle")+status("drained_busy"), pick("spacelift_worker_pool_workers"); got != want {
+					t.Errorf("sum of statuses = %v, want spacelift_worker_pool_workers{%s = %v", got, pool, want)
 				}
 			}
 			if pools == 0 {

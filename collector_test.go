@@ -245,6 +245,34 @@ func TestQueryShape(t *testing.T) {
 			}
 		}
 	}
+
+	// A default scrape sends exactly the default documents, each once, and
+	// never an opt-in one: enabling nothing must not add API cost.
+	defaultStub := newGraphQLStub(t, fixture(t, "saas"))
+	defaultMetrics := make(chan prometheus.Metric, 256)
+	defaultStub.collector(t).Collect(defaultMetrics)
+	close(defaultMetrics)
+	defaultQueries, defaultNames := defaultStub.recorded()
+
+	wantDefault := []string{
+		"PrometheusExporter_Aggregates",
+		"PrometheusExporter_PublicWorkerPool",
+		"PrometheusExporter_Usage",
+		"PrometheusExporter_WorkerPools",
+	}
+	if got := slices.Sorted(slices.Values(defaultNames)); !slices.Equal(got, wantDefault) {
+		t.Errorf("default scrape operationName envelope fields = %v, want exactly %v", got, wantDefault)
+	}
+	var defaultOperations []string
+	for _, query := range defaultQueries {
+		defaultOperations = append(defaultOperations, operationOf(query))
+	}
+	if got := slices.Sorted(slices.Values(defaultOperations)); !slices.Equal(got, wantDefault) {
+		t.Errorf("default scrape sent documents %v, want exactly %v", got, wantDefault)
+	}
+	if slices.Contains(defaultOperations, "PrometheusExporter_WorkerStatus") || slices.Contains(defaultNames, "PrometheusExporter_WorkerStatus") {
+		t.Error("default scrape sent PrometheusExporter_WorkerStatus, which is opt-in")
+	}
 }
 
 // TestGatherErrorNamesTheFailingCollector fails one collector's document and
