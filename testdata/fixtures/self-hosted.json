@@ -12,8 +12,8 @@
         "pendingRuns": 1,
         "busyWorkers": 2,
         "workers": [
-          { "id": "worker-1", "drained": false },
-          { "id": "worker-2", "drained": false }
+          { "id": "worker-1", "drained": false, "busy": true },
+          { "id": "worker-2", "drained": false, "busy": true }
         ]
       }
     ],

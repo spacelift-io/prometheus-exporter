@@ -205,12 +205,20 @@ var serveCommand *cli.Command = &cli.Command{
 		// Create a new registry.
 		reg := prometheus.NewRegistry()
 
-		collectors := newCollectors(collectorSelection(cmd))
+		selection := collectorSelection(cmd)
+		collectors := newCollectors(selection)
 		if len(collectors) == 0 {
 			return cli.Exit("every collector is disabled, so there would be nothing to export", ExitCodeStartupError)
 		}
 
-		exporter, err := newExporter(ctx, httpClient, session, scrapeTimeout, collectors, cmd.Bool(flagPartialScrapes.Name))
+		partialScrapes := cmd.Bool(flagPartialScrapes.Name)
+		if optIn := enabledOptIn(selection); len(optIn) > 0 && !partialScrapes {
+			logger.Warnw("Opt-in collectors are enabled without --partial-scrapes: a failure or timeout in one of them fails the whole scrape, "+
+				"default metrics included. Consider enabling --partial-scrapes",
+				"collectors", strings.Join(optIn, ", "))
+		}
+
+		exporter, err := newExporter(ctx, httpClient, session, scrapeTimeout, collectors, partialScrapes)
 		if err != nil {
 			return cli.Exit(fmt.Sprintf("could not create Spacelift collector: %v", err), ExitCodeStartupError)
 		}
