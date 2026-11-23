@@ -18,11 +18,19 @@ The exporter uses
 to authenticate, and also needs to know your Spacelift account API endpoint. Your API endpoint is in
 the format `https://<account>.app.spacelift.io`, for example `https://my-account.app.spacelift.io`.
 
-**NOTE:** on current Spacelift SaaS any API key works, provided it can read the root space (the
-`usage` field requires it). Self-Hosted releases older than August 2026 restrict `publicWorkerPool`,
-`usage` and `metrics` to non-machine keys; on such a release, run the exporter with an admin user's
-key or with `--partial-scrapes`, which serves the private worker pool metrics and reports the
-restricted collectors as unsupported (see below).
+**NOTE:** the API key does not need admin access. It needs read access to the root space, because
+the `usage` field requires it. Spacelift SaaS has accepted such a key for every collector since
+September 2026.
+
+Older Self-Hosted releases reject some fields for API keys:
+
+- Releases older than August 2026 reject `publicWorkerPool`, `usage` and `metrics`, and the
+  private worker pool counters (`pendingRuns`, `busyWorkers` and `workers`). No collector works
+  with an API key on these releases, so run the exporter with an admin user's key.
+- Releases from August 2026 still reject the private worker pool counters. The `workerpools`
+  collector reports as unsupported, and in the default mode that fails the whole scrape. Run the
+  exporter with `--partial-scrapes` to serve the other collectors (see below), or with an admin
+  user's key.
 
 #### OIDC API keys with rotating secrets
 
