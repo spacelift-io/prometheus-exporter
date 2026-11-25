@@ -169,7 +169,7 @@ OPTIONS:
    --partial-scrapes                 Serve the metrics of the collectors that succeeded when another collector fails, instead of failing the whole scrape. A scrape in which no collector succeeds still returns HTTP 500 (default: false) [$SPACELIFT_PROMEX_PARTIAL_SCRAPES]
    --[no-]collector.publicworkerpool Enable the publicworkerpool collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_PUBLICWORKERPOOL]
    --[no-]collector.workerpools      Enable the workerpools collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_WORKERPOOLS]
-   --[no-]collector.workerpoolruns   Enable the workerpoolruns collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_WORKERPOOLRUNS]
+   --[no-]collector.workerpoolqueue   Enable the workerpoolqueue collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_WORKERPOOLQUEUE]
    --[no-]collector.usage            Enable the usage collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_USAGE]
    --[no-]collector.aggregates       Enable the aggregates collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_AGGREGATES]
 ```
@@ -186,7 +186,7 @@ spacelift-promex version 0.0.1
 ## Scrape failures
 
 Each scrape issues one GraphQL request per enabled collector (`publicworkerpool`, `workerpools`,
-`workerpoolruns`, `usage`, `aggregates`), concurrently, within one `--scrape-timeout` deadline. Disable a collector with
+`workerpoolqueue`, `usage`, `aggregates`), concurrently, within one `--scrape-timeout` deadline. Disable a collector with
 `--no-collector.<name>` or `SPACELIFT_PROMEX_COLLECTOR_<NAME>=false`; a disabled collector issues
 no request and emits no series.
 
@@ -229,7 +229,7 @@ What each collector serves:
 | ------------------ | --------------------------------------------------------------------------------------------- |
 | `workerpools`      | Per-pool pending runs and worker counts                                                       |
 | `publicworkerpool` | Pending runs, busy workers and parallelism on the public worker pool                          |
-| `workerpoolruns`   | Per-pool pending runs by run type and drift detection                                         |
+| `workerpoolqueue`   | Per-pool pending runs by run type and drift detection                                         |
 | `usage`            | Billing-period start, end and usage counters                                                  |
 | `aggregates`       | Account-wide stack counts by state, resource drift, average stack size and run-duration stats |
 

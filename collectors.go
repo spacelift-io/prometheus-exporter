@@ -26,7 +26,7 @@ type collectorSpec struct {
 var collectorSpecs = []collectorSpec{
 	{name: "publicworkerpool", defaultEnabled: true, build: collector.NewPublicWorkerPool},
 	{name: "workerpools", defaultEnabled: true, build: collector.NewWorkerPools},
-	{name: "workerpoolruns", defaultEnabled: true, build: collector.NewWorkerPoolRuns},
+	{name: "workerpoolqueue", defaultEnabled: true, build: collector.NewWorkerPoolQueue},
 	{name: "usage", defaultEnabled: true, build: collector.NewUsage},
 	{name: "aggregates", defaultEnabled: true, build: collector.NewAggregates},
 }

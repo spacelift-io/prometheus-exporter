@@ -27,17 +27,17 @@ func TestNewCollectorsHonoursDefaultsAndOverrides(t *testing.T) {
 	}{
 		{
 			name: "defaults",
-			want: []string{"publicworkerpool", "workerpools", "workerpoolruns", "usage", "aggregates"},
+			want: []string{"publicworkerpool", "workerpools", "workerpoolqueue", "usage", "aggregates"},
 		},
 		{
 			name:    "disable one",
 			enabled: map[string]bool{"usage": false},
-			want:    []string{"publicworkerpool", "workerpools", "workerpoolruns", "aggregates"},
+			want:    []string{"publicworkerpool", "workerpools", "workerpoolqueue", "aggregates"},
 		},
 		{
 			name: "disable all",
 			enabled: map[string]bool{
-				"publicworkerpool": false, "workerpools": false, "workerpoolruns": false, "usage": false, "aggregates": false,
+				"publicworkerpool": false, "workerpools": false, "workerpoolqueue": false, "usage": false, "aggregates": false,
 			},
 		},
 	} {
@@ -61,17 +61,17 @@ func TestCollectorFlagsDisableCollectors(t *testing.T) {
 	}{
 		{
 			name: "defaults",
-			want: []string{"publicworkerpool", "workerpools", "workerpoolruns", "usage", "aggregates"},
+			want: []string{"publicworkerpool", "workerpools", "workerpoolqueue", "usage", "aggregates"},
 		},
 		{
 			name: "inverse flag",
 			args: []string{"--no-collector.usage"},
-			want: []string{"publicworkerpool", "workerpools", "workerpoolruns", "aggregates"},
+			want: []string{"publicworkerpool", "workerpools", "workerpoolqueue", "aggregates"},
 		},
 		{
 			name: "environment variable",
 			env:  map[string]string{"SPACELIFT_PROMEX_COLLECTOR_AGGREGATES": "false"},
-			want: []string{"publicworkerpool", "workerpools", "workerpoolruns", "usage"},
+			want: []string{"publicworkerpool", "workerpools", "workerpoolqueue", "usage"},
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {

@@ -169,7 +169,7 @@ func TestQueryShape(t *testing.T) {
 	expectedQueries := map[string]string{
 		"PrometheusExporter_PublicWorkerPool": `query PrometheusExporter_PublicWorkerPool{publicWorkerPool{parallelism,busyWorkers,pendingRuns}}`,
 		"PrometheusExporter_WorkerPools":      `query PrometheusExporter_WorkerPools{workerPools{id,name,pendingRuns,busyWorkers,workers{id,drained}}}`,
-		"PrometheusExporter_WorkerPoolRuns":   `query PrometheusExporter_WorkerPoolRuns{workerPools{id,name,searchSchedulableRuns(input: {}){edges{node{run{type,state,driftDetection}}},pageInfo{hasNextPage}}}}`,
+		"PrometheusExporter_WorkerPoolQueue":  `query PrometheusExporter_WorkerPoolQueue{workerPools{id,name,searchSchedulableRuns(input: {}){edges{node{run{type,state,driftDetection}}},pageInfo{hasNextPage}}}}`,
 		"PrometheusExporter_Usage":            `query PrometheusExporter_Usage{usage{billingPeriodStart,billingPeriodEnd,usedPrivateMinutes,usedPublicMinutes,usedSeats}}`,
 		"PrometheusExporter_Aggregates":       `query PrometheusExporter_Aggregates{metrics{stacksCountByState{value,labels},resourcesCountByDrift{value,labels},avgStackSizeByResourceCount{value,labels},averageRunDuration{value,labels},medianRunDuration{value,labels}}}`,
 	}
@@ -498,7 +498,7 @@ func TestGatedBackendDegradesGracefully(t *testing.T) {
 	}
 }
 
-// runsResponse renders a WorkerPoolRuns response for one pool whose queue
+// runsResponse renders a WorkerPoolQueue response for one pool whose queue
 // holds the given runs, each "TYPE/STATE/drift" with drift "d" or "-".
 func runsResponse(hasNextPage bool, runs ...string) string {
 	var edges []string
@@ -513,12 +513,12 @@ func runsResponse(hasNextPage bool, runs ...string) string {
 		strings.Join(edges, ","), hasNextPage)
 }
 
-// TestWorkerPoolRunsCountsOnlyReadyRunsByTypeAndDrift pins what the by-type
+// TestWorkerPoolQueueCountsOnlyReadyRunsByTypeAndDrift pins what the by-type
 // series mean: queued (READY) runs only, split by type and drift, so that the
 // non-drift series are what an autoscaler should follow.
-func TestWorkerPoolRunsCountsOnlyReadyRunsByTypeAndDrift(t *testing.T) {
+func TestWorkerPoolQueueCountsOnlyReadyRunsByTypeAndDrift(t *testing.T) {
 	stub := newGraphQLStub(t, fixture(t, "saas"))
-	stub.failOperation("PrometheusExporter_WorkerPoolRuns", runsResponse(false,
+	stub.failOperation("PrometheusExporter_WorkerPoolQueue", runsResponse(false,
 		"TRACKED/READY/-", "TRACKED/PLANNING/-", "PROPOSED/READY/-", "PROPOSED/READY/d", "PROPOSED/READY/d",
 		"DESTROY/READY/-", "PROPOSED/PREPARING/d", "FUTURE_TYPE/READY/-"))
 
@@ -541,17 +541,17 @@ func TestWorkerPoolRunsCountsOnlyReadyRunsByTypeAndDrift(t *testing.T) {
 	}
 }
 
-// TestWorkerPoolRunsRefusesAPartialQueue: counting one page of a paginated
+// TestWorkerPoolQueueRefusesAPartialQueue: counting one page of a paginated
 // queue would under-report and under-scale without anyone noticing, so the
 // collector fails instead, and the workerpools metrics are unaffected.
-func TestWorkerPoolRunsRefusesAPartialQueue(t *testing.T) {
+func TestWorkerPoolQueueRefusesAPartialQueue(t *testing.T) {
 	stub := newGraphQLStub(t, fixture(t, "saas"))
-	stub.failOperation("PrometheusExporter_WorkerPoolRuns", runsResponse(true, "TRACKED/READY/-"))
+	stub.failOperation("PrometheusExporter_WorkerPoolQueue", runsResponse(true, "TRACKED/READY/-"))
 
 	output := gather(t, stub.partialCollector(t))
 
 	for _, want := range []string{
-		`spacelift_scrape_collector_success{collector="workerpoolruns"} 0`,
+		`spacelift_scrape_collector_success{collector="workerpoolqueue"} 0`,
 		`spacelift_scrape_collector_success{collector="workerpools"} 1`,
 		"spacelift_worker_pool_runs_pending{",
 	} {

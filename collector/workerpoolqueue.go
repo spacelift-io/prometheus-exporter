@@ -21,20 +21,20 @@ const runStateReady = "READY"
 // A type the API adds later is still counted, under its own lower-cased name.
 var knownRunTypes = []string{"proposed", "tracked", "task", "testing", "destroy", "parse"}
 
-// workerPoolRuns breaks each private worker pool's pending runs down by run
+// workerPoolQueue breaks each private worker pool's pending runs down by run
 // type and by whether the run belongs to a drift detection workflow. It exists
 // so that autoscalers can ignore low-priority work such as drift detection,
 // which pendingRuns on its own cannot tell apart.
 //
 // It is a collector of its own, with its own document, so that a failure here
 // does not take the workerpools metrics down with it.
-type workerPoolRuns struct {
+type workerPoolQueue struct {
 	runsPendingByType *prometheus.Desc
 }
 
-// NewWorkerPoolRuns returns the per-type pending runs collector.
-func NewWorkerPoolRuns() Collector {
-	return &workerPoolRuns{
+// NewWorkerPoolQueue returns the per-type pending runs collector.
+func NewWorkerPoolQueue() Collector {
+	return &workerPoolQueue{
 		runsPendingByType: prometheus.NewDesc(
 			"spacelift_worker_pool_runs_pending_by_type",
 			"The number of runs currently queued and waiting for a worker from a particular pool, by run type and drift detection",
@@ -43,13 +43,13 @@ func NewWorkerPoolRuns() Collector {
 	}
 }
 
-func (c *workerPoolRuns) Name() string { return "workerpoolruns" }
+func (c *workerPoolQueue) Name() string { return "workerpoolqueue" }
 
-func (c *workerPoolRuns) Describe(ch chan<- *prometheus.Desc) {
+func (c *workerPoolQueue) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.runsPendingByType
 }
 
-type workerPoolRunsQuery struct {
+type workerPoolQueueQuery struct {
 	WorkerPools []struct {
 		ID                    string `graphql:"id"`
 		Name                  string `graphql:"name"`
@@ -76,9 +76,9 @@ type runKey struct {
 	drift   bool
 }
 
-func (c *workerPoolRuns) Collect(ctx context.Context, api client.Client) ([]prometheus.Metric, error) {
-	var query workerPoolRunsQuery
-	if err := api.QueryNamed(ctx, &query, nil, "WorkerPoolRuns"); err != nil {
+func (c *workerPoolQueue) Collect(ctx context.Context, api client.Client) ([]prometheus.Metric, error) {
+	var query workerPoolQueueQuery
+	if err := api.QueryNamed(ctx, &query, nil, "WorkerPoolQueue"); err != nil {
 		return nil, err
 	}
 
