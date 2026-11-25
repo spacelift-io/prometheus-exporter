@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"maps"
 	"net/http"
 	"net/http/httptest"
@@ -168,6 +169,7 @@ func TestQueryShape(t *testing.T) {
 	expectedQueries := map[string]string{
 		"PrometheusExporter_PublicWorkerPool": `query PrometheusExporter_PublicWorkerPool{publicWorkerPool{parallelism,busyWorkers,pendingRuns}}`,
 		"PrometheusExporter_WorkerPools":      `query PrometheusExporter_WorkerPools{workerPools{id,name,pendingRuns,busyWorkers,workers{id,drained}}}`,
+		"PrometheusExporter_WorkerPoolRuns":   `query PrometheusExporter_WorkerPoolRuns{workerPools{id,name,searchSchedulableRuns(input: {}){edges{node{run{type,state,driftDetection}}},pageInfo{hasNextPage}}}}`,
 		"PrometheusExporter_Usage":            `query PrometheusExporter_Usage{usage{billingPeriodStart,billingPeriodEnd,usedPrivateMinutes,usedPublicMinutes,usedSeats}}`,
 		"PrometheusExporter_Aggregates":       `query PrometheusExporter_Aggregates{metrics{stacksCountByState{value,labels},resourcesCountByDrift{value,labels},avgStackSizeByResourceCount{value,labels},averageRunDuration{value,labels},medianRunDuration{value,labels}}}`,
 	}
@@ -493,5 +495,71 @@ func TestGatedBackendDegradesGracefully(t *testing.T) {
 	// And the ungated collector still works.
 	if !strings.Contains(output, "spacelift_worker_pool_runs_pending{") {
 		t.Errorf("worker pool metrics should still be collected on a gated backend:\n%s", output)
+	}
+}
+
+// runsResponse renders a WorkerPoolRuns response for one pool whose queue
+// holds the given runs, each "TYPE/STATE/drift" with drift "d" or "-".
+func runsResponse(hasNextPage bool, runs ...string) string {
+	var edges []string
+	for _, run := range runs {
+		parts := strings.Split(run, "/")
+		edges = append(edges, fmt.Sprintf(
+			`{"node":{"run":{"type":%q,"state":%q,"driftDetection":%t}}}`, parts[0], parts[1], parts[2] == "d"))
+	}
+
+	return fmt.Sprintf(
+		`{"data":{"workerPools":[{"id":"pool-1","name":"main","searchSchedulableRuns":{"edges":[%s],"pageInfo":{"hasNextPage":%t}}}]}}`,
+		strings.Join(edges, ","), hasNextPage)
+}
+
+// TestWorkerPoolRunsCountsOnlyReadyRunsByTypeAndDrift pins what the by-type
+// series mean: queued (READY) runs only, split by type and drift, so that the
+// non-drift series are what an autoscaler should follow.
+func TestWorkerPoolRunsCountsOnlyReadyRunsByTypeAndDrift(t *testing.T) {
+	stub := newGraphQLStub(t, fixture(t, "saas"))
+	stub.failOperation("PrometheusExporter_WorkerPoolRuns", runsResponse(false,
+		"TRACKED/READY/-", "TRACKED/PLANNING/-", "PROPOSED/READY/-", "PROPOSED/READY/d", "PROPOSED/READY/d",
+		"DESTROY/READY/-", "PROPOSED/PREPARING/d", "FUTURE_TYPE/READY/-"))
+
+	output := gather(t, stub.partialCollector(t))
+
+	for _, want := range []string{
+		`spacelift_worker_pool_runs_pending_by_type{drift="false",run_type="tracked",worker_pool_id="pool-1",worker_pool_name="main"} 1`,
+		`spacelift_worker_pool_runs_pending_by_type{drift="false",run_type="proposed",worker_pool_id="pool-1",worker_pool_name="main"} 1`,
+		`spacelift_worker_pool_runs_pending_by_type{drift="true",run_type="proposed",worker_pool_id="pool-1",worker_pool_name="main"} 2`,
+		`spacelift_worker_pool_runs_pending_by_type{drift="false",run_type="destroy",worker_pool_id="pool-1",worker_pool_name="main"} 1`,
+		// A known type with nothing queued is still emitted, as zero.
+		`spacelift_worker_pool_runs_pending_by_type{drift="false",run_type="task",worker_pool_id="pool-1",worker_pool_name="main"} 0`,
+		// A type the exporter does not know is counted rather than dropped,
+		// so the series keep summing to the pool's pending runs.
+		`spacelift_worker_pool_runs_pending_by_type{drift="false",run_type="future_type",worker_pool_id="pool-1",worker_pool_name="main"} 1`,
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("missing %q in:\n%s", want, output)
+		}
+	}
+}
+
+// TestWorkerPoolRunsRefusesAPartialQueue: counting one page of a paginated
+// queue would under-report and under-scale without anyone noticing, so the
+// collector fails instead, and the workerpools metrics are unaffected.
+func TestWorkerPoolRunsRefusesAPartialQueue(t *testing.T) {
+	stub := newGraphQLStub(t, fixture(t, "saas"))
+	stub.failOperation("PrometheusExporter_WorkerPoolRuns", runsResponse(true, "TRACKED/READY/-"))
+
+	output := gather(t, stub.partialCollector(t))
+
+	for _, want := range []string{
+		`spacelift_scrape_collector_success{collector="workerpoolruns"} 0`,
+		`spacelift_scrape_collector_success{collector="workerpools"} 1`,
+		"spacelift_worker_pool_runs_pending{",
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("missing %q in:\n%s", want, output)
+		}
+	}
+	if strings.Contains(output, "spacelift_worker_pool_runs_pending_by_type{") {
+		t.Error("a partial queue was reported anyway")
 	}
 }

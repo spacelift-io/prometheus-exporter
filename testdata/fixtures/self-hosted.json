@@ -14,7 +14,13 @@
         "workers": [
           { "id": "worker-1", "drained": false },
           { "id": "worker-2", "drained": false }
-        ]
+        ],
+        "searchSchedulableRuns": {
+          "edges": [
+            { "node": { "run": { "type": "PROPOSED", "state": "READY", "driftDetection": true } } }
+          ],
+          "pageInfo": { "hasNextPage": false }
+        }
       }
     ],
     "usage": {
