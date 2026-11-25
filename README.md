@@ -169,6 +169,7 @@ OPTIONS:
    --partial-scrapes                 Serve the metrics of the collectors that succeeded when another collector fails, instead of failing the whole scrape. A scrape in which no collector succeeds still returns HTTP 500 (default: false) [$SPACELIFT_PROMEX_PARTIAL_SCRAPES]
    --[no-]collector.publicworkerpool Enable the publicworkerpool collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_PUBLICWORKERPOOL]
    --[no-]collector.workerpools      Enable the workerpools collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_WORKERPOOLS]
+   --[no-]collector.workerpoolqueue   Enable the workerpoolqueue collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_WORKERPOOLQUEUE]
    --[no-]collector.usage            Enable the usage collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_USAGE]
    --[no-]collector.aggregates       Enable the aggregates collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_AGGREGATES]
 ```
@@ -185,7 +186,7 @@ spacelift-promex version 0.0.1
 ## Scrape failures
 
 Each scrape issues one GraphQL request per enabled collector (`publicworkerpool`, `workerpools`,
-`usage`, `aggregates`), concurrently, within one `--scrape-timeout` deadline. Disable a collector with
+`workerpoolqueue`, `usage`, `aggregates`), concurrently, within one `--scrape-timeout` deadline. Disable a collector with
 `--no-collector.<name>` or `SPACELIFT_PROMEX_COLLECTOR_<NAME>=false`; a disabled collector issues
 no request and emits no series.
 
@@ -228,6 +229,7 @@ What each collector serves:
 | ------------------ | --------------------------------------------------------------------------------------------- |
 | `workerpools`      | Per-pool pending runs and worker counts                                                       |
 | `publicworkerpool` | Pending runs, busy workers and parallelism on the public worker pool                          |
+| `workerpoolqueue`   | Per-pool pending runs by run type and drift detection                                         |
 | `usage`            | Billing-period start, end and usage counters                                                  |
 | `aggregates`       | Account-wide stack counts by state, resource drift, average stack size and run-duration stats |
 
@@ -274,6 +276,7 @@ The following metrics are provided by the exporter:
 | `spacelift_public_worker_pool_workers_busy`                |                                      | The number of currently busy workers in the public worker pool for this account                |
 | `spacelift_public_worker_pool_parallelism`                 |                                      | The maximum number of simultaneously executing runs on the public worker pool for this account |
 | `spacelift_worker_pool_runs_pending`                       | `worker_pool_id`, `worker_pool_name` | The number of runs currently queued and waiting for a worker from a particular pool            |
+| `spacelift_worker_pool_runs_pending_by_type`               | `worker_pool_id`, `worker_pool_name`, `run_type`, `drift` | The number of runs queued and waiting for a worker from a particular pool, by run type (`proposed`, `tracked`, `task`, `testing`, `destroy`, `parse`) and whether the run belongs to a drift detection workflow. Sums to `spacelift_worker_pool_runs_pending` |
 | `spacelift_worker_pool_workers_busy`                       | `worker_pool_id`, `worker_pool_name` | The number of currently busy workers in a worker pool                                          |
 | `spacelift_worker_pool_workers`                            | `worker_pool_id`, `worker_pool_name` | The number of workers in a worker pool                                                         |
 | `spacelift_worker_pool_workers_drained`                    | `worker_pool_id`, `worker_pool_name` | The number of workers in a worker pool that have been drained                                  |

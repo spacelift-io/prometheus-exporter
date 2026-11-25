@@ -18,7 +18,19 @@
           { "id": "worker-d", "drained": false },
           { "id": "worker-e", "drained": true },
           { "id": "worker-f", "drained": true }
-        ]
+        ],
+        "searchSchedulableRuns": {
+          "edges": [
+            { "node": { "run": { "type": "TRACKED", "state": "READY", "driftDetection": false } } },
+            { "node": { "run": { "type": "TRACKED", "state": "PLANNING", "driftDetection": false } } },
+            { "node": { "run": { "type": "PROPOSED", "state": "READY", "driftDetection": false } } },
+            { "node": { "run": { "type": "PROPOSED", "state": "READY", "driftDetection": true } } },
+            { "node": { "run": { "type": "PROPOSED", "state": "READY", "driftDetection": true } } },
+            { "node": { "run": { "type": "DESTROY", "state": "READY", "driftDetection": false } } },
+            { "node": { "run": { "type": "PROPOSED", "state": "PREPARING", "driftDetection": true } } }
+          ],
+          "pageInfo": { "hasNextPage": false }
+        }
       },
       {
         "id": "01HQZXA1B2C3D4E5F6G7H8J9K0",
@@ -29,7 +41,11 @@
           { "id": "worker-g", "drained": false },
           { "id": "worker-h", "drained": false },
           { "id": "worker-i", "drained": false }
-        ]
+        ],
+        "searchSchedulableRuns": {
+          "edges": [],
+          "pageInfo": { "hasNextPage": false }
+        }
       }
     ],
     "usage": {

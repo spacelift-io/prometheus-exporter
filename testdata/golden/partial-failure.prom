@@ -30,18 +30,21 @@ spacelift_public_worker_pool_workers_busy 3
 spacelift_scrape_collector_duration_seconds{collector="aggregates"} <duration>
 spacelift_scrape_collector_duration_seconds{collector="publicworkerpool"} <duration>
 spacelift_scrape_collector_duration_seconds{collector="usage"} <duration>
+spacelift_scrape_collector_duration_seconds{collector="workerpoolqueue"} <duration>
 spacelift_scrape_collector_duration_seconds{collector="workerpools"} <duration>
 # HELP spacelift_scrape_collector_success Whether a collector succeeded on the last scrape (1) or failed (0).
 # TYPE spacelift_scrape_collector_success gauge
 spacelift_scrape_collector_success{collector="aggregates"} 0
 spacelift_scrape_collector_success{collector="publicworkerpool"} 1
 spacelift_scrape_collector_success{collector="usage"} 1
+spacelift_scrape_collector_success{collector="workerpoolqueue"} 1
 spacelift_scrape_collector_success{collector="workerpools"} 1
 # HELP spacelift_scrape_collector_supported Whether a collector's data is available on this deployment, tier and API key (1) or not (0). An unsupported collector is not a failure.
 # TYPE spacelift_scrape_collector_supported gauge
 spacelift_scrape_collector_supported{collector="aggregates"} 1
 spacelift_scrape_collector_supported{collector="publicworkerpool"} 1
 spacelift_scrape_collector_supported{collector="usage"} 1
+spacelift_scrape_collector_supported{collector="workerpoolqueue"} 1
 spacelift_scrape_collector_supported{collector="workerpools"} 1
 # HELP spacelift_scrape_duration_seconds The duration in seconds of the request to the Spacelift API for metrics
 # TYPE spacelift_scrape_duration_seconds gauge
@@ -50,6 +53,32 @@ spacelift_scrape_duration_seconds <duration>
 # TYPE spacelift_worker_pool_runs_pending gauge
 spacelift_worker_pool_runs_pending{worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 5
 spacelift_worker_pool_runs_pending{worker_pool_id="01HQZXA1B2C3D4E5F6G7H8J9K0",worker_pool_name="staging"} 0
+# HELP spacelift_worker_pool_runs_pending_by_type The number of runs currently queued and waiting for a worker from a particular pool, by run type and drift detection
+# TYPE spacelift_worker_pool_runs_pending_by_type gauge
+spacelift_worker_pool_runs_pending_by_type{drift="false",run_type="destroy",worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 1
+spacelift_worker_pool_runs_pending_by_type{drift="false",run_type="destroy",worker_pool_id="01HQZXA1B2C3D4E5F6G7H8J9K0",worker_pool_name="staging"} 0
+spacelift_worker_pool_runs_pending_by_type{drift="false",run_type="parse",worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 0
+spacelift_worker_pool_runs_pending_by_type{drift="false",run_type="parse",worker_pool_id="01HQZXA1B2C3D4E5F6G7H8J9K0",worker_pool_name="staging"} 0
+spacelift_worker_pool_runs_pending_by_type{drift="false",run_type="proposed",worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 1
+spacelift_worker_pool_runs_pending_by_type{drift="false",run_type="proposed",worker_pool_id="01HQZXA1B2C3D4E5F6G7H8J9K0",worker_pool_name="staging"} 0
+spacelift_worker_pool_runs_pending_by_type{drift="false",run_type="task",worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 0
+spacelift_worker_pool_runs_pending_by_type{drift="false",run_type="task",worker_pool_id="01HQZXA1B2C3D4E5F6G7H8J9K0",worker_pool_name="staging"} 0
+spacelift_worker_pool_runs_pending_by_type{drift="false",run_type="testing",worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 0
+spacelift_worker_pool_runs_pending_by_type{drift="false",run_type="testing",worker_pool_id="01HQZXA1B2C3D4E5F6G7H8J9K0",worker_pool_name="staging"} 0
+spacelift_worker_pool_runs_pending_by_type{drift="false",run_type="tracked",worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 1
+spacelift_worker_pool_runs_pending_by_type{drift="false",run_type="tracked",worker_pool_id="01HQZXA1B2C3D4E5F6G7H8J9K0",worker_pool_name="staging"} 0
+spacelift_worker_pool_runs_pending_by_type{drift="true",run_type="destroy",worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 0
+spacelift_worker_pool_runs_pending_by_type{drift="true",run_type="destroy",worker_pool_id="01HQZXA1B2C3D4E5F6G7H8J9K0",worker_pool_name="staging"} 0
+spacelift_worker_pool_runs_pending_by_type{drift="true",run_type="parse",worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 0
+spacelift_worker_pool_runs_pending_by_type{drift="true",run_type="parse",worker_pool_id="01HQZXA1B2C3D4E5F6G7H8J9K0",worker_pool_name="staging"} 0
+spacelift_worker_pool_runs_pending_by_type{drift="true",run_type="proposed",worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 2
+spacelift_worker_pool_runs_pending_by_type{drift="true",run_type="proposed",worker_pool_id="01HQZXA1B2C3D4E5F6G7H8J9K0",worker_pool_name="staging"} 0
+spacelift_worker_pool_runs_pending_by_type{drift="true",run_type="task",worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 0
+spacelift_worker_pool_runs_pending_by_type{drift="true",run_type="task",worker_pool_id="01HQZXA1B2C3D4E5F6G7H8J9K0",worker_pool_name="staging"} 0
+spacelift_worker_pool_runs_pending_by_type{drift="true",run_type="testing",worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 0
+spacelift_worker_pool_runs_pending_by_type{drift="true",run_type="testing",worker_pool_id="01HQZXA1B2C3D4E5F6G7H8J9K0",worker_pool_name="staging"} 0
+spacelift_worker_pool_runs_pending_by_type{drift="true",run_type="tracked",worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 0
+spacelift_worker_pool_runs_pending_by_type{drift="true",run_type="tracked",worker_pool_id="01HQZXA1B2C3D4E5F6G7H8J9K0",worker_pool_name="staging"} 0
 # HELP spacelift_worker_pool_workers The number of workers in a worker pool
 # TYPE spacelift_worker_pool_workers gauge
 spacelift_worker_pool_workers{worker_pool_id="01HQZX9K7P2M3N4Q5R6S7T8U9V",worker_pool_name="production"} 6
