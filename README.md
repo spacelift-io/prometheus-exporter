@@ -168,9 +168,13 @@ OPTIONS:
    --scrape-timeout value, -t value  The maximum duration to wait for a response from the Spacelift API during scraping (default: 5s) [$SPACELIFT_PROMEX_SCRAPE_TIMEOUT]
    --partial-scrapes                 Serve the metrics of the collectors that succeeded when another collector fails, instead of failing the whole scrape. A scrape in which no collector succeeds still returns HTTP 500 (default: false) [$SPACELIFT_PROMEX_PARTIAL_SCRAPES]
    --[no-]collector.publicworkerpool Enable the publicworkerpool collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_PUBLICWORKERPOOL]
+   --collector.publicworkerpool.cache-ttl duration  Serve the publicworkerpool collector's last result for this long instead of querying the API on every scrape. A failure is retried after at most 30s, or this duration if shorter, and a request cut short by --scrape-timeout is not kept. 0 queries on every scrape (default: 0s) [$SPACELIFT_PROMEX_COLLECTOR_PUBLICWORKERPOOL_CACHE_TTL]
    --[no-]collector.workerpools      Enable the workerpools collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_WORKERPOOLS]
+   --collector.workerpools.cache-ttl duration       Serve the workerpools collector's last result for this long instead of querying the API on every scrape. A failure is retried after at most 30s, or this duration if shorter, and a request cut short by --scrape-timeout is not kept. 0 queries on every scrape (default: 0s) [$SPACELIFT_PROMEX_COLLECTOR_WORKERPOOLS_CACHE_TTL]
    --[no-]collector.usage            Enable the usage collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_USAGE]
+   --collector.usage.cache-ttl duration             Serve the usage collector's last result for this long instead of querying the API on every scrape. A failure is retried after at most 30s, or this duration if shorter, and a request cut short by --scrape-timeout is not kept. 0 queries on every scrape (default: 0s) [$SPACELIFT_PROMEX_COLLECTOR_USAGE_CACHE_TTL]
    --[no-]collector.aggregates       Enable the aggregates collector (default: true) [$SPACELIFT_PROMEX_COLLECTOR_AGGREGATES]
+   --collector.aggregates.cache-ttl duration        Serve the aggregates collector's last result for this long instead of querying the API on every scrape. A failure is retried after at most 30s, or this duration if shorter, and a request cut short by --scrape-timeout is not kept. 0 queries on every scrape (default: 0s) [$SPACELIFT_PROMEX_COLLECTOR_AGGREGATES_CACHE_TTL]
 ```
 
 ## Version
@@ -290,8 +294,44 @@ The following metrics are provided by the exporter:
 | `spacelift_scrape_collector_success`                       | `collector`                          | Whether the collector succeeded on the last scrape (1) or failed (0)                           |
 | `spacelift_scrape_collector_supported`                     | `collector`                          | Whether the collector's data is available on this deployment, tier and API key (1) or not (0) |
 | `spacelift_scrape_collector_duration_seconds`              | `collector`                          | The duration in seconds of the collector's request to the Spacelift API on the last scrape     |
+| `spacelift_scrape_collector_cache_age_seconds`             | `collector`                          | The age of the data a cached collector served on the last scrape; only for collectors with a cache TTL, and only when it served data |
 | `spacelift_scrape_duration_seconds`                        |                                      | The duration in seconds of the request to the Spacelift API for metrics (the whole scrape; collectors query concurrently) |
 | `spacelift_build_info`                                     |                                      | Contains build information about the exporter (version, commit, etc)                           |
+
+## Collector cache TTL
+
+`--collector.<name>.cache-ttl` (or `SPACELIFT_PROMEX_COLLECTOR_<NAME>_CACHE_TTL`) makes a collector
+whose requests succeed query the API at most once per TTL, however often and by however many
+scrapers the exporter is scraped. Scrapes in between are served the outcome of the last request,
+timed from when that request returned, and scrapes that arrive while a request is in flight wait
+for it instead of issuing one alongside it. The first scrape after the TTL has passed issues a new
+request. The default of `0` queries on
+every scrape, as the exporter always has. A negative TTL is rejected at startup, a TTL set for a
+disabled collector is ignored with a warning, and the startup log shows the TTL next to each enabled
+collector that has one. See [Scrape interval and API load](#scrape-interval-and-api-load) for how
+the scrape configuration sets the request rate without a TTL.
+
+The series of a cached collector can be up to one TTL old, so a TTL suits a collector whose data is
+slow-moving and whose consumers tolerate staleness, such as `aggregates`. Leave it at `0` for a
+collector that an alert or autoscaler reads for fresh values, such as `workerpools`.
+
+A failed request is served for at most 30 seconds, or the TTL if that is shorter, and the next scrape
+after that retries. A failed refresh replaces the data it could not refresh, so an outage shows up
+instead of the previous result being served. A request cut short by the scrape's own
+`--scrape-timeout` is not cached at all. An unsupported result is kept for the whole TTL. A served failure counts like any other: by default
+it fails the whole scrape, and with `--partial-scrapes` it sets that collector's
+`spacelift_scrape_collector_success` to `0`.
+
+A cached collector reports what it served:
+
+- `spacelift_scrape_collector_success` and `spacelift_scrape_collector_supported` describe the
+  outcome served.
+- `spacelift_scrape_collector_duration_seconds` reports how long the scrape waited for the
+  collector, so it reads near zero for a scrape served from cache.
+- `spacelift_scrape_collector_cache_age_seconds` reports how old the data served is, measured from
+  when its request returned. It is only emitted for collectors with a TTL, and only when the
+  collector served data rather than a failure. It stays below the TTL, so alert on
+  `spacelift_scrape_collector_success` rather than on the age.
 
 ## Example Dashboard
 

@@ -108,19 +108,61 @@ var (
 )
 
 // collectorCLIFlags returns one --[no-]collector.<name> flag per collector, in
-// the node_exporter idiom.
+// the node_exporter idiom, and one --collector.<name>.cache-ttl flag.
 func collectorCLIFlags() []cli.Flag {
-	flags := make([]cli.Flag, 0, len(collectorSpecs))
+	flags := make([]cli.Flag, 0, 2*len(collectorSpecs))
 	for _, spec := range collectorSpecs {
-		flags = append(flags, &cli.BoolWithInverseFlag{
-			Name:    "collector." + spec.name,
-			Usage:   "Enable the " + spec.name + " collector",
-			Value:   spec.defaultEnabled,
-			Sources: cli.EnvVars("SPACELIFT_PROMEX_COLLECTOR_" + strings.ToUpper(spec.name)),
-		})
+		env := "SPACELIFT_PROMEX_COLLECTOR_" + strings.ToUpper(spec.name)
+		flags = append(flags,
+			&cli.BoolWithInverseFlag{
+				Name:    "collector." + spec.name,
+				Usage:   "Enable the " + spec.name + " collector",
+				Value:   spec.defaultEnabled,
+				Sources: cli.EnvVars(env),
+			},
+			&cli.DurationFlag{
+				Name: cacheTTLFlagName(spec.name),
+				Usage: "Serve the " + spec.name + " collector's last result for this long instead of " +
+					"querying the API on every scrape. A failure is retried after at most 30s, or this duration if " +
+					"shorter, and a request cut short by --scrape-timeout is not kept. 0 queries on every scrape",
+				Sources: cli.EnvVars(env + "_CACHE_TTL"),
+			},
+		)
 	}
 
 	return flags
+}
+
+func cacheTTLFlagName(collector string) string {
+	return "collector." + collector + ".cache-ttl"
+}
+
+// collectorCacheTTLs reads the cache TTL flags, keyed by collector name.
+func collectorCacheTTLs(cmd *cli.Command) (map[string]time.Duration, error) {
+	out := make(map[string]time.Duration, len(collectorSpecs))
+	for _, spec := range collectorSpecs {
+		ttl := cmd.Duration(cacheTTLFlagName(spec.name))
+		if ttl < 0 {
+			return nil, fmt.Errorf("--%s must not be negative", cacheTTLFlagName(spec.name))
+		}
+		out[spec.name] = ttl
+	}
+
+	return out, nil
+}
+
+// ignoredCacheTTLs lists, in flag order, the disabled collectors that were
+// given a positive cache TTL. The TTL has no effect on them, so the caller
+// warns rather than dropping it silently.
+func ignoredCacheTTLs(enabled map[string]bool, ttls map[string]time.Duration) []string {
+	var out []string
+	for _, spec := range collectorSpecs {
+		if ttls[spec.name] > 0 && !enabled[spec.name] {
+			out = append(out, spec.name)
+		}
+	}
+
+	return out
 }
 
 // collectorSelection reads the collector flags into the map newCollectors takes.
@@ -166,6 +208,22 @@ var serveCommand *cli.Command = &cli.Command{
 			return cli.Exit(fmt.Sprintf("api-endpoint %q does not seem to be a valid URL", apiEndpoint), ExitCodeStartupError)
 		}
 
+		selection := collectorSelection(cmd)
+		collectors := newCollectors(selection)
+		if len(collectors) == 0 {
+			return cli.Exit("every collector is disabled, so there would be nothing to export", ExitCodeStartupError)
+		}
+
+		cacheTTLs, err := collectorCacheTTLs(cmd)
+		if err != nil {
+			return cli.Exit(err.Error(), ExitCodeStartupError)
+		}
+		for _, name := range ignoredCacheTTLs(selection, cacheTTLs) {
+			logger.Warnw("Ignoring the cache TTL of a disabled collector",
+				"collector", name, "flag", "--"+cacheTTLFlagName(name), "cache_ttl", cacheTTLs[name].String())
+		}
+		collectors = withCacheTTLs(collectors, cacheTTLs)
+
 		secretProvider, err := buildSecretProvider(apiKeySecret, apiKeySecretFile)
 		if err != nil {
 			return cli.Exit(err.Error(), ExitCodeStartupError)
@@ -205,11 +263,6 @@ var serveCommand *cli.Command = &cli.Command{
 		// Create a new registry.
 		reg := prometheus.NewRegistry()
 
-		collectors := newCollectors(collectorSelection(cmd))
-		if len(collectors) == 0 {
-			return cli.Exit("every collector is disabled, so there would be nothing to export", ExitCodeStartupError)
-		}
-
 		exporter, err := newExporter(ctx, httpClient, session, scrapeTimeout, collectors, cmd.Bool(flagPartialScrapes.Name))
 		if err != nil {
 			return cli.Exit(fmt.Sprintf("could not create Spacelift collector: %v", err), ExitCodeStartupError)
@@ -218,7 +271,11 @@ var serveCommand *cli.Command = &cli.Command{
 
 		names := make([]string, 0, len(collectors))
 		for _, c := range collectors {
-			names = append(names, c.Name())
+			name := c.Name()
+			if ttl := cacheTTLs[name]; ttl > 0 {
+				name += " (cache TTL " + ttl.String() + ")"
+			}
+			names = append(names, name)
 		}
 		logger.Infow("Collectors enabled", "collectors", strings.Join(names, ", "))
 
